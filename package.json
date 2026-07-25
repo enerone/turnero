@@ -20,25 +20,33 @@
     "db:studio": "prisma studio"
   },
   "dependencies": {
+    "@lucia-auth/adapter-prisma": "^4.0.1",
+    "@prisma/client": "^6.0.0",
+    "arctic": "^1.9.2",
+    "iron-session": "^8.0.4",
+    "lucia": "^3.2.2",
     "next": "^15.0.0",
+    "oslo": "^1.2.1",
+    "pino": "^9.14.0",
+    "pino-pretty": "^11.3.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "@prisma/client": "^6.0.0",
+    "resend": "^4.8.0",
     "zod": "^3.23.0"
   },
   "devDependencies": {
-    "typescript": "^5.6.0",
+    "@playwright/test": "^1.48.0",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
-    "prisma": "^6.0.0",
-    "vitest": "^2.1.0",
     "@vitest/coverage-v8": "^2.1.0",
-    "@playwright/test": "^1.48.0",
     "eslint": "^9.0.0",
     "eslint-config-next": "^15.0.0",
     "prettier": "^3.3.0",
-    "tsx": "^4.19.0"
+    "prisma": "^6.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
