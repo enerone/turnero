@@ -38,6 +38,38 @@ export async function GET(req: NextRequest) {
     const tokens = await google.validateAuthorizationCode(code, storedVerifier)
     const userInfo = await obtenerUserInfo(tokens.accessToken)
 
+    // Chequear si viene de una invitación
+    const COOKIE_INTENT_INVITACION = 'turnero_invitacion_pending'
+    const invitacionSealed = cookieStore.get(COOKIE_INTENT_INVITACION)?.value
+    if (invitacionSealed) {
+      cookieStore.delete(COOKIE_INTENT_INVITACION)
+      cookieStore.delete(COOKIE_STATE)
+      cookieStore.delete(COOKIE_VERIFIER)
+      try {
+        const { deserializarPendingInvitacion } = await import('@/lib/auth/pending-onboarding')
+        const { aceptarInvitacion } = await import('@/lib/invitaciones/aceptar')
+        const pendingInv = await deserializarPendingInvitacion(
+          invitacionSealed,
+          env.SESSION_SECRET,
+        )
+        const usuario = await aceptarInvitacion(pendingInv.token, {
+          googleSub: userInfo.sub,
+          email: userInfo.email,
+          nombre: userInfo.name,
+        })
+        const cuenta = await basePrisma.cuenta.findUniqueOrThrow({
+          where: { id: usuario.cuentaId },
+        })
+        const session = await lucia.createSession(usuario.id, {})
+        const sessionCookie = lucia.createSessionCookie(session.id)
+        cookieStore.set(sessionCookie.name, sessionCookie.value, sessionCookie.attributes)
+        return NextResponse.redirect(new URL(`/${cuenta.slug}`, env.PUBLIC_BASE_URL))
+      } catch (e) {
+        logger.warn({ err: e }, 'Aceptar invitación falló')
+        return NextResponse.redirect(new URL('/login?error=invitacion', env.PUBLIC_BASE_URL))
+      }
+    }
+
     const existente = await basePrisma.usuario.findUnique({
       where: { googleSub: userInfo.sub },
       include: { cuenta: true },
