@@ -13,7 +13,10 @@ export default defineConfig({
     pool: 'forks',
     poolOptions: {
       forks: {
-        singleFork: false,
+        // Los tests de integración comparten la misma base local y hacen
+        // TRUNCATE en beforeEach. Corriendo en paralelo se pisan y salen flaky.
+        // singleFork=true corre todos los archivos en un solo worker, sin race.
+        singleFork: true,
       },
     },
   },

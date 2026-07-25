@@ -1,8 +1,13 @@
 import { PrismaClient } from '@prisma/client'
 import { afterAll, afterEach, beforeAll, beforeEach } from 'vitest'
 
+// testPrisma usa DIRECT_URL (rol owner) para poder TRUNCATE.
+// La app runtime (basePrisma) usa DATABASE_URL (rol non-superuser, RLS aplica).
 export const testPrisma = new PrismaClient({
   log: ['error'],
+  datasources: {
+    db: { url: process.env.DIRECT_URL ?? process.env.DATABASE_URL },
+  },
 })
 
 const TABLES_TO_TRUNCATE = [

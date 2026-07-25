@@ -1,17 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import { basePrisma } from '@/lib/db/base-prisma'
 import { createTenantClient } from '@/lib/db/tenant-client'
-import { useTestDatabase } from './helpers/db'
+import { testPrisma, useTestDatabase } from './helpers/db'
 import { crearCuentaFixture, crearServicioFixture } from './helpers/fixtures'
 
 describe('createTenantClient', () => {
   useTestDatabase()
 
   it('inyecta cuentaId en findMany', async () => {
-    const cuentaA = await crearCuentaFixture(basePrisma)
-    const cuentaB = await crearCuentaFixture(basePrisma)
-    await crearServicioFixture(basePrisma, cuentaA.id, { nombre: 'A' })
-    await crearServicioFixture(basePrisma, cuentaB.id, { nombre: 'B' })
+    const cuentaA = await crearCuentaFixture(testPrisma)
+    const cuentaB = await crearCuentaFixture(testPrisma)
+    await crearServicioFixture(testPrisma, cuentaA.id, { nombre: 'A' })
+    await crearServicioFixture(testPrisma, cuentaB.id, { nombre: 'B' })
 
     const dbA = createTenantClient(cuentaA.id)
     const servicios = await dbA.servicio.findMany()
@@ -21,7 +20,7 @@ describe('createTenantClient', () => {
   })
 
   it('inyecta cuentaId en create sin pedirlo explícito', async () => {
-    const cuenta = await crearCuentaFixture(basePrisma)
+    const cuenta = await crearCuentaFixture(testPrisma)
     const db = createTenantClient(cuenta.id)
 
     const servicio = await db.servicio.create({
@@ -32,9 +31,9 @@ describe('createTenantClient', () => {
   })
 
   it('bloquea update de otro tenant vía findFirstOrThrow', async () => {
-    const cuentaA = await crearCuentaFixture(basePrisma)
-    const cuentaB = await crearCuentaFixture(basePrisma)
-    const servicioB = await crearServicioFixture(basePrisma, cuentaB.id)
+    const cuentaA = await crearCuentaFixture(testPrisma)
+    const cuentaB = await crearCuentaFixture(testPrisma)
+    const servicioB = await crearServicioFixture(testPrisma, cuentaB.id)
 
     const dbA = createTenantClient(cuentaA.id)
 
@@ -45,16 +44,16 @@ describe('createTenantClient', () => {
       }),
     ).rejects.toThrow()
 
-    const sinCambios = await basePrisma.servicio.findUnique({ where: { id: servicioB.id } })
+    const sinCambios = await testPrisma.servicio.findUnique({ where: { id: servicioB.id } })
     expect(sinCambios?.nombre).not.toBe('hackeado')
   })
 
   it('count respeta el filtro de tenant', async () => {
-    const cuentaA = await crearCuentaFixture(basePrisma)
-    const cuentaB = await crearCuentaFixture(basePrisma)
-    await crearServicioFixture(basePrisma, cuentaA.id)
-    await crearServicioFixture(basePrisma, cuentaB.id, { nombre: 'B1', esDefault: false })
-    await crearServicioFixture(basePrisma, cuentaB.id, { nombre: 'B2', esDefault: false })
+    const cuentaA = await crearCuentaFixture(testPrisma)
+    const cuentaB = await crearCuentaFixture(testPrisma)
+    await crearServicioFixture(testPrisma, cuentaA.id)
+    await crearServicioFixture(testPrisma, cuentaB.id, { nombre: 'B1', esDefault: false })
+    await crearServicioFixture(testPrisma, cuentaB.id, { nombre: 'B2', esDefault: false })
 
     const dbA = createTenantClient(cuentaA.id)
     const dbB = createTenantClient(cuentaB.id)
@@ -64,7 +63,7 @@ describe('createTenantClient', () => {
   })
 
   it('no toca modelos que no son tenant-scoped (Cuenta)', async () => {
-    const cuentaA = await crearCuentaFixture(basePrisma)
+    const cuentaA = await crearCuentaFixture(testPrisma)
     const dbA = createTenantClient(cuentaA.id)
 
     const todas = await dbA.cuenta.findMany()

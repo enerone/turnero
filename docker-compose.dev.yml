@@ -10,6 +10,11 @@ services:
       - '5433:5432'
     volumes:
       - turnero_pgdata:/var/lib/postgresql/data
+      # Bootstrap script: crea el rol turnero_app NOSUPERUSER NOBYPASSRLS
+      # que la app usa en runtime (DATABASE_URL). turnero (owner) queda para
+      # migraciones y setup de tests (DIRECT_URL).
+      # Solo corre en initdb (volumen vacío).
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U turnero -d turnero']
       interval: 5s
