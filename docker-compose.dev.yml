@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: turnero-postgres
+    environment:
+      POSTGRES_USER: turnero
+      POSTGRES_PASSWORD: turnero
+      POSTGRES_DB: turnero
+    ports:
+      - '5433:5432'
+    volumes:
+      - turnero_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U turnero -d turnero']
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  turnero_pgdata:
