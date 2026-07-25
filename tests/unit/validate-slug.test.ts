@@ -21,7 +21,7 @@ describe('validarSlug', () => {
   ])('slug "%s" → válido=%s', (input, esValido) => {
     const resultado = validarSlug(input)
     expect(resultado.valido).toBe(esValido)
-    if (!esValido) {
+    if (!resultado.valido) {
       expect(resultado.razon).toBeTruthy()
     }
   })
