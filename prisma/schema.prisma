@@ -20,5 +20,240 @@ model Cuenta {
   createdAt          DateTime @default(now()) @map("created_at")
   updatedAt          DateTime @updatedAt @map("updated_at")
 
+  usuarios             Usuario[]
+  integracionCalendar  IntegracionCalendar?
+  servicios            Servicio[]
+  horariosSemanales    HorarioSemanal[]
+  excepcionesHorario   ExcepcionHorario[]
+  clientes             Cliente[]
+  turnos               Turno[]
+  eventosExternos      EventoExterno[]
+  auditLogs            AuditLog[]
+  invitaciones         Invitacion[]
+
   @@map("cuenta")
+}
+
+enum RolUsuario {
+  owner
+  secretaria
+
+  @@map("rol_usuario")
+}
+
+model Usuario {
+  id        String     @id @default(uuid()) @db.Uuid
+  cuentaId  String     @map("cuenta_id") @db.Uuid
+  email     String
+  nombre    String
+  googleSub String     @unique @map("google_sub")
+  rol       RolUsuario
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
+
+  cuenta Cuenta @relation(fields: [cuentaId], references: [id], onDelete: Cascade)
+
+  @@unique([cuentaId, email])
+  @@index([cuentaId])
+  @@map("usuario")
+}
+
+enum EstadoIntegracion {
+  conectado
+  desconectado
+
+  @@map("estado_integracion")
+}
+
+model IntegracionCalendar {
+  id                        String            @id @default(uuid()) @db.Uuid
+  cuentaId                  String            @unique @map("cuenta_id") @db.Uuid
+  refreshTokenCifrado       Bytes             @map("refresh_token_cifrado")
+  calendarIdDedicado        String?           @map("calendar_id_dedicado")
+  calendarIdPrimario        String            @default("primary") @map("calendar_id_primario")
+  watchChannelDedicadoId    String?           @map("watch_channel_dedicado_id")
+  watchChannelDedicadoExpira DateTime?        @map("watch_channel_dedicado_expira")
+  watchChannelPrimarioId    String?           @map("watch_channel_primario_id")
+  watchChannelPrimarioExpira DateTime?        @map("watch_channel_primario_expira")
+  syncTokenDedicado         String?           @map("sync_token_dedicado")
+  syncTokenPrimario         String?           @map("sync_token_primario")
+  estado                    EstadoIntegracion @default(conectado)
+  createdAt                 DateTime          @default(now()) @map("created_at")
+  updatedAt                 DateTime          @updatedAt @map("updated_at")
+
+  cuenta Cuenta @relation(fields: [cuentaId], references: [id], onDelete: Cascade)
+
+  @@map("integracion_calendar")
+}
+
+model Servicio {
+  id                  String   @id @default(uuid()) @db.Uuid
+  cuentaId            String   @map("cuenta_id") @db.Uuid
+  nombre              String
+  duracionMinutos     Int      @map("duracion_minutos")
+  esDefault           Boolean  @default(false) @map("es_default")
+  permiteSobreturnos  Boolean  @default(false) @map("permite_sobreturnos")
+  activo              Boolean  @default(true)
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  cuenta Cuenta  @relation(fields: [cuentaId], references: [id], onDelete: Cascade)
+  turnos Turno[]
+
+  @@index([cuentaId])
+  @@map("servicio")
+}
+
+model HorarioSemanal {
+  id         String   @id @default(uuid()) @db.Uuid
+  cuentaId   String   @map("cuenta_id") @db.Uuid
+  diaSemana  Int      @map("dia_semana")
+  desde      DateTime @db.Time
+  hasta      DateTime @db.Time
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  cuenta Cuenta @relation(fields: [cuentaId], references: [id], onDelete: Cascade)
+
+  @@index([cuentaId, diaSemana])
+  @@map("horario_semanal")
+}
+
+enum TipoExcepcion {
+  cerrado
+  horario_especial
+
+  @@map("tipo_excepcion")
+}
+
+model ExcepcionHorario {
+  id        String        @id @default(uuid()) @db.Uuid
+  cuentaId  String        @map("cuenta_id") @db.Uuid
+  fecha     DateTime      @db.Date
+  tipo      TipoExcepcion
+  desde     DateTime?     @db.Time
+  hasta     DateTime?     @db.Time
+  motivo    String        @default("")
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedAt DateTime      @updatedAt @map("updated_at")
+
+  cuenta Cuenta @relation(fields: [cuentaId], references: [id], onDelete: Cascade)
+
+  @@unique([cuentaId, fecha])
+  @@map("excepcion_horario")
+}
+
+model Cliente {
+  id        String   @id @default(uuid()) @db.Uuid
+  cuentaId  String   @map("cuenta_id") @db.Uuid
+  nombre    String
+  telefono  String
+  email     String?
+  notas     String   @default("")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  cuenta Cuenta  @relation(fields: [cuentaId], references: [id], onDelete: Cascade)
+  turnos Turno[]
+
+  @@unique([cuentaId, telefono])
+  @@index([cuentaId])
+  @@map("cliente")
+}
+
+enum EstadoTurno {
+  borrador
+  confirmado
+  cancelado
+  completado
+  no_asistio
+
+  @@map("estado_turno")
+}
+
+enum OrigenTurno {
+  turnero
+  google_calendar
+
+  @@map("origen_turno")
+}
+
+enum OrigenCancelacion {
+  panel
+  google_calendar
+  cliente
+
+  @@map("origen_cancelacion")
+}
+
+model Turno {
+  id                 String             @id @default(uuid()) @db.Uuid
+  cuentaId           String             @map("cuenta_id") @db.Uuid
+  clienteId          String?            @map("cliente_id") @db.Uuid
+  servicioId         String             @map("servicio_id") @db.Uuid
+  inicio             DateTime           @db.Timestamptz(6)
+  fin                DateTime           @db.Timestamptz(6)
+  estado             EstadoTurno        @default(confirmado)
+  googleEventId      String?            @map("google_event_id")
+  googleEventEtag    String?            @map("google_event_etag")
+  origen             OrigenTurno        @default(turnero)
+  origenCancelacion  OrigenCancelacion? @map("origen_cancelacion")
+  notas              String             @default("")
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
+
+  cuenta   Cuenta    @relation(fields: [cuentaId], references: [id], onDelete: Cascade)
+  cliente  Cliente?  @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+  servicio Servicio  @relation(fields: [servicioId], references: [id], onDelete: Restrict)
+
+  @@index([cuentaId, inicio])
+  @@index([cuentaId, googleEventId])
+  @@map("turno")
+}
+
+model EventoExterno {
+  id            String   @id @default(uuid()) @db.Uuid
+  cuentaId      String   @map("cuenta_id") @db.Uuid
+  googleEventId String   @map("google_event_id")
+  inicio        DateTime @db.Timestamptz(6)
+  fin           DateTime @db.Timestamptz(6)
+  titulo        String?
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  cuenta Cuenta @relation(fields: [cuentaId], references: [id], onDelete: Cascade)
+
+  @@unique([cuentaId, googleEventId])
+  @@index([cuentaId, inicio])
+  @@map("evento_externo")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  cuentaId   String   @map("cuenta_id") @db.Uuid
+  usuarioId  String?  @map("usuario_id") @db.Uuid
+  accion     String
+  entidad    String
+  entidadId  String?  @map("entidad_id") @db.Uuid
+  payload    Json
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  cuenta Cuenta @relation(fields: [cuentaId], references: [id], onDelete: Cascade)
+
+  @@index([cuentaId, createdAt])
+  @@map("audit_log")
+}
+
+model Invitacion {
+  id         String    @id @default(uuid()) @db.Uuid
+  cuentaId   String    @map("cuenta_id") @db.Uuid
+  email      String
+  token      String    @unique
+  expiraEn   DateTime  @map("expira_en")
+  aceptadaEn DateTime? @map("aceptada_en")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  cuenta Cuenta @relation(fields: [cuentaId], references: [id], onDelete: Cascade)
+
+  @@index([cuentaId])
+  @@map("invitacion")
 }
