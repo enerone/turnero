@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: turnero
+          POSTGRES_PASSWORD: turnero
+          POSTGRES_DB: turnero
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U turnero -d turnero"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://turnero_app:turnero_app@localhost:5433/turnero?schema=public
+      DIRECT_URL: postgresql://turnero:turnero@localhost:5433/turnero?schema=public
+      PUBLIC_BASE_URL: http://localhost:3000
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Create turnero_app role
+        run: |
+          PGPASSWORD=turnero psql -h localhost -p 5433 -U turnero -d turnero -c "
+            CREATE ROLE turnero_app WITH LOGIN PASSWORD 'turnero_app' NOSUPERUSER NOBYPASSRLS;
+            GRANT CONNECT ON DATABASE turnero TO turnero_app;
+            GRANT USAGE ON SCHEMA public TO turnero_app;
+            GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO turnero_app;
+            GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO turnero_app;
+            ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO turnero_app;
+            ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO turnero_app;
+          "
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Run migrations
+        run: npx prisma migrate deploy
+
+      - name: Post-migration grants for turnero_app
+        run: |
+          PGPASSWORD=turnero psql -h localhost -p 5433 -U turnero -d turnero -c "
+            GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO turnero_app;
+            GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO turnero_app;
+          "
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit + integration tests
+        run: npm test
+
+      - name: Install Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: E2E tests
+        run: npm run test:e2e
