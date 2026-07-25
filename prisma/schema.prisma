@@ -53,6 +53,7 @@ model Usuario {
   updatedAt DateTime   @updatedAt @map("updated_at")
 
   cuenta Cuenta @relation(fields: [cuentaId], references: [id], onDelete: Cascade)
+  sessions Session[]
 
   @@unique([cuentaId, email])
   @@index([cuentaId])
@@ -257,4 +258,15 @@ model Invitacion {
 
   @@index([cuentaId])
   @@map("invitacion")
+}
+
+model Session {
+  id        String   @id
+  usuarioId String   @map("usuario_id") @db.Uuid
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(6)
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId])
+  @@map("session")
 }
