@@ -25,16 +25,25 @@ export function middleware(req: NextRequest) {
     return NextResponse.next()
   }
 
+  // Propagamos el slug del tenant a la request para que server components / route handlers
+  // puedan leerlo vía `headers()`.
+  const requestHeaders = new Headers(req.headers)
+  requestHeaders.set('x-tenant-slug', resuelto.slug)
+
   // Si vino por subdominio, reescribimos el path para que Next.js matchee /[slug]/...
   if (resuelto.fuente === 'subdominio') {
     const nuevaUrl = req.nextUrl.clone()
     nuevaUrl.pathname = `/${resuelto.slug}${pathname === '/' ? '' : pathname}`
-    const resp = NextResponse.rewrite(nuevaUrl)
+    const resp = NextResponse.rewrite(nuevaUrl, {
+      request: { headers: requestHeaders },
+    })
     resp.headers.set('x-tenant-slug', resuelto.slug)
     return resp
   }
 
-  const resp = NextResponse.next()
+  const resp = NextResponse.next({
+    request: { headers: requestHeaders },
+  })
   resp.headers.set('x-tenant-slug', resuelto.slug)
   return resp
 }
