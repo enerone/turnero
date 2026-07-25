@@ -47,6 +47,21 @@ function injectTenantScope(operation: string, args: any, cuentaId: string): any 
   return args
 }
 
+/**
+ * Devuelve un Prisma client extendido que inyecta cuentaId en todas las queries
+ * sobre modelos tenant-scoped, y las envuelve en una transacción con
+ * SET LOCAL app.cuenta_id (para que RLS coopere).
+ *
+ * Cheap de llamar por-request: comparte el pool de conexiones de basePrisma.
+ *
+ * LIMITACIONES CONOCIDAS (RLS en Postgres actúa como red de seguridad):
+ * 1. Nested writes NO reciben inyección de cuentaId. No hacer:
+ *      db.turno.create({ data: { cliente: { create: { ... } } } })
+ *    En su lugar: crear cliente y turno en dos llamadas separadas.
+ * 2. $queryRaw y $executeRaw NO son interceptados. Evitar raw SQL sobre
+ *    modelos tenant-scoped, o setear app.cuenta_id manualmente en la misma
+ *    transacción.
+ */
 export function createTenantClient(cuentaId: string) {
   return basePrisma.$extends({
     name: 'tenant-scope',
