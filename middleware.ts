@@ -6,7 +6,7 @@ const DOMINIO_BASE = process.env.PUBLIC_BASE_URL
   ? new URL(process.env.PUBLIC_BASE_URL).hostname
   : 'localhost'
 
-const RUTAS_PUBLICAS_SIN_TENANT = new Set(['/login', '/onboarding'])
+const RUTAS_PUBLICAS_SIN_TENANT = new Set(['/login'])
 
 function esRutaSistema(pathname: string): boolean {
   return (
@@ -17,8 +17,27 @@ function esRutaSistema(pathname: string): boolean {
   )
 }
 
-// El nombre de la cookie de sesión de Lucia es 'auth_session' por default en v3
 const COOKIE_SESION = 'auth_session'
+
+const RATE_LIMIT_MAP = new Map<string, { count: number; resetAt: number }>()
+
+function rateLimit(key: string, max: number, windowMs: number): boolean {
+  const now = Date.now()
+  const entry = RATE_LIMIT_MAP.get(key)
+  if (!entry || now > entry.resetAt) {
+    RATE_LIMIT_MAP.set(key, { count: 1, resetAt: now + windowMs })
+    return true
+  }
+  if (entry.count >= max) return false
+  entry.count++
+  return true
+}
+
+function getClientIp(req: NextRequest): string {
+  return req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
+    req.headers.get('x-real-ip') ??
+    'unknown'
+}
 
 export function middleware(req: NextRequest) {
   const hostname = req.headers.get('host') ?? ''
@@ -33,10 +52,30 @@ export function middleware(req: NextRequest) {
     return NextResponse.next()
   }
 
+  // Rate limit /onboarding (GET): 10 req/min por IP
+  if (pathname === '/onboarding') {
+    const ip = getClientIp(req)
+    if (!rateLimit(`onboarding:${ip}`, 10, 60_000)) {
+      return new NextResponse('Demasiadas solicitudes', { status: 429 })
+    }
+  }
+
+  // Rate limit /api/auth/google (GET): 20 req/min por IP
+  if (pathname.startsWith('/api/auth/google') && req.method === 'GET') {
+    const ip = getClientIp(req)
+    if (!rateLimit(`oauth_google:${ip}`, 20, 60_000)) {
+      return new NextResponse('Demasiadas solicitudes', { status: 429 })
+    }
+  }
+
+  // Bloquear /onboarding sin cookie pending-onboarding
+  if (pathname === '/onboarding' && !req.cookies.get(NOMBRE_COOKIE_PENDING)) {
+    return NextResponse.redirect(new URL('/login?error=onboarding_expired', req.url))
+  }
+
   const resuelto = slugDesdeRequest({ hostname, pathname }, DOMINIO_BASE)
 
   if (!resuelto) {
-    // Landing sin slug
     if (req.cookies.get(NOMBRE_COOKIE_PENDING)) {
       return NextResponse.redirect(new URL('/onboarding', req.url))
     }
@@ -46,15 +85,14 @@ export function middleware(req: NextRequest) {
     return NextResponse.next()
   }
 
-  const requestHeaders = new Headers(req.headers)
-  requestHeaders.set('x-tenant-slug', resuelto.slug)
-
   if (resuelto.fuente === 'subdominio') {
     const nuevaUrl = req.nextUrl.clone()
     nuevaUrl.pathname = `/${resuelto.slug}${pathname === '/' ? '' : pathname}`
-    return NextResponse.rewrite(nuevaUrl, { request: { headers: requestHeaders } })
+    return NextResponse.redirect(nuevaUrl)
   }
 
+  const requestHeaders = new Headers(req.headers)
+  requestHeaders.set('x-tenant-slug', resuelto.slug)
   return NextResponse.next({ request: { headers: requestHeaders } })
 }
 

@@ -4,7 +4,7 @@ import { derivarLlavePorCuenta } from '@/lib/crypto/hkdf'
 import { env } from '@/lib/shared/env'
 import { logger } from '@/lib/shared/logger'
 import { enqueueBootstrapCalendar } from '@/lib/jobs/enqueue'
-import type { Cuenta, Usuario } from '@prisma/client'
+import type { Cuenta, Usuario, Prisma } from '@prisma/client'
 
 export interface DatosPendingOnboarding {
   googleSub: string
@@ -30,6 +30,24 @@ function timeToDate(hhmm: string): Date {
   return new Date(`1970-01-01T${hhmm}:00.000Z`)
 }
 
+/**
+ * Crea una cuenta usando la función SECURITY DEFINER `crear_cuenta`
+ * para evitar problemas de RLS con prepared statements en rol NOBYPASSRLS.
+ */
+async function crearCuentaViaFuncion(
+  tx: Prisma.TransactionClient,
+  slug: string,
+  nombrePublico: string,
+  _telefonoWhatsapp: string,
+): Promise<Cuenta> {
+  const filas = await tx.$queryRaw<Cuenta[]>`
+    SELECT * FROM crear_cuenta(${slug}, ${nombrePublico}, '#0ea5e9', 'America/Argentina/Buenos_Aires')
+  `
+  const cuenta = filas[0]
+  if (!cuenta) throw new Error('crear_cuenta no devolvió resultado')
+  return cuenta
+}
+
 export async function completarOnboarding(
   pending: DatosPendingOnboarding,
   form: DatosFormOnboarding,
@@ -37,13 +55,7 @@ export async function completarOnboarding(
   const master = Buffer.from(env.ENCRYPTION_KEY, 'base64')
 
   const resultado = await basePrisma.$transaction(async (tx) => {
-    const cuenta = await tx.cuenta.create({
-      data: {
-        slug: form.slug,
-        nombrePublico: form.nombrePublico,
-        telefonoWhatsapp: form.telefonoWhatsapp,
-      },
-    })
+    const cuenta = await crearCuentaViaFuncion(tx, form.slug, form.nombrePublico, form.telefonoWhatsapp)
 
     await tx.$executeRaw`SELECT set_config('app.cuenta_id', ${cuenta.id}, TRUE)`
 

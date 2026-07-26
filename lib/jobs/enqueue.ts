@@ -10,6 +10,7 @@ export async function enqueueBootstrapCalendar(payload: PayloadBootstrapCalendar
     retryLimit: 5,
     retryDelay: 5,
     retryBackoff: true,
+    singletonKey: `bootstrap-calendar:${payload.cuentaId}`,
   })
   if (!jobId) throw new Error(`pg-boss no devolvió jobId para ${NOMBRE_JOB_BOOTSTRAP_CALENDAR}`)
   return jobId

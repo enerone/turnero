@@ -1,4 +1,5 @@
 import { basePrisma } from '@/lib/db/base-prisma'
+import { createTenantClient } from '@/lib/db/tenant-client'
 import type { Usuario } from '@prisma/client'
 
 export interface DatosGoogleParaAceptar {
@@ -28,10 +29,9 @@ export async function aceptarInvitacion(
   if (inv.aceptada_en) throw new Error('Invitación ya fue aceptada')
   if (new Date(inv.expira_en) < new Date()) throw new Error('Invitación expirada')
 
-  // Ahora hago los writes con RLS aplicando sobre la cuenta correcta
-  return basePrisma.$transaction(async (tx) => {
-    await tx.$executeRaw`SELECT set_config('app.cuenta_id', ${inv.cuenta_id}, TRUE)`
-
+  // Writes con tenant client (inyecta cuentaId y setea app.cuenta_id)
+  const db = createTenantClient(inv.cuenta_id)
+  return db.$transaction(async (tx) => {
     const usuario = await tx.usuario.create({
       data: {
         cuentaId: inv.cuenta_id,

@@ -59,6 +59,8 @@ npm run dev
 - **Lookup cross-tenant sin contexto** (jobs, session validation, invitation): función SQL `SECURITY DEFINER` explícita (`lookup_integracion_calendar`, `lookup_session_con_usuario`, `lookup_invitacion_por_token`). Bypasea RLS solo para ese SELECT específico, con GRANT explícito a `turnero_app`.
 - **Watch channels, sync bidireccional, webhook, reconciliación** → Plan 3b.
 
+> **⚠️ Limitación serverless:** `pg-boss` corre en el mismo proceso Node. En plataformas serverless (Vercel, AWS Lambda) el proceso se apaga entre invocaciones → los workers dejan de procesar jobs. Para producción serverless, migrar a worker separado (Railway, Fly.io, Cloud Run) o usar cola externa (Redis + BullMQ, SQS). Ver `instrumentation.ts` para el boot actual.
+
 ## Setup de Google OAuth (dev)
 
 1. En [Google Cloud Console](https://console.cloud.google.com), creá un proyecto y andá a APIs & Services → Credentials.
