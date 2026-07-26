@@ -1,4 +1,9 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+
+vi.mock('@/lib/jobs/enqueue', () => ({
+  enqueueBootstrapCalendar: vi.fn().mockResolvedValue('mock-job-id'),
+}))
+
 import { testPrisma, useTestDatabase } from './helpers/db'
 import { completarOnboarding } from '@/lib/onboarding/completar'
 

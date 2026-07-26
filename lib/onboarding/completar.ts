@@ -2,6 +2,8 @@ import { basePrisma } from '@/lib/db/base-prisma'
 import { cifrar } from '@/lib/crypto/aes-gcm'
 import { derivarLlavePorCuenta } from '@/lib/crypto/hkdf'
 import { env } from '@/lib/shared/env'
+import { logger } from '@/lib/shared/logger'
+import { enqueueBootstrapCalendar } from '@/lib/jobs/enqueue'
 import type { Cuenta, Usuario } from '@prisma/client'
 
 export interface DatosPendingOnboarding {
@@ -34,7 +36,7 @@ export async function completarOnboarding(
 ): Promise<ResultadoOnboarding> {
   const master = Buffer.from(env.ENCRYPTION_KEY, 'base64')
 
-  return basePrisma.$transaction(async (tx) => {
+  const resultado = await basePrisma.$transaction(async (tx) => {
     const cuenta = await tx.cuenta.create({
       data: {
         slug: form.slug,
@@ -43,8 +45,6 @@ export async function completarOnboarding(
       },
     })
 
-    // Setear el GUC de tenant en la misma transacción para que RLS deje
-    // pasar los inserts en tablas tenant-scoped (usuario, servicio, etc.).
     await tx.$executeRaw`SELECT set_config('app.cuenta_id', ${cuenta.id}, TRUE)`
 
     const usuario = await tx.usuario.create({
@@ -88,4 +88,20 @@ export async function completarOnboarding(
 
     return { cuenta, usuario }
   })
+
+  // Post-commit: encolar bootstrap-calendar. Errores acá no rompen el onboarding.
+  try {
+    const jobId = await enqueueBootstrapCalendar({ cuentaId: resultado.cuenta.id })
+    logger.info(
+      { cuentaId: resultado.cuenta.id, jobId },
+      'bootstrap-calendar encolado post-onboarding',
+    )
+  } catch (err) {
+    logger.error(
+      { err, cuentaId: resultado.cuenta.id },
+      'Falló enqueue de bootstrap-calendar (el usuario puede reintentar manualmente)',
+    )
+  }
+
+  return resultado
 }
