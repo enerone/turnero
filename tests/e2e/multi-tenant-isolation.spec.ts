@@ -59,7 +59,11 @@ test.describe('aislamiento multi-tenant end-to-end', () => {
   })
 
   test('slug reservado no matchea /[slug]', async ({ request }) => {
-    const resp = await request.get('/admin/debug')
-    expect([404, 405]).toContain(resp.status())
+    // Plan 2: middleware redirige a /login cuando no hay sesión y el slug
+    // no resuelve (reservados como "admin" caen en esta rama).
+    // Antes de Plan 2 devolvía 404 directo. Ambas respuestas dejan claro que
+    // no matcheó /[slug].
+    const resp = await request.get('/admin/debug', { maxRedirects: 0 })
+    expect([404, 405, 307]).toContain(resp.status())
   })
 })

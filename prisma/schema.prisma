@@ -262,11 +262,11 @@ model Invitacion {
 
 model Session {
   id        String   @id
-  usuarioId String   @map("usuario_id") @db.Uuid
+  userId    String   @map("usuario_id") @db.Uuid
   expiresAt DateTime @map("expires_at") @db.Timestamptz(6)
 
-  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  usuario Usuario @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([usuarioId])
+  @@index([userId])
   @@map("session")
 }
