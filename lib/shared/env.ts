@@ -18,6 +18,11 @@ const schema = z.object({
   RESEND_API_KEY: z.string().default(''),
   RESEND_FROM: z.string().default('Turnero <onboarding@localhost>'),
 
+  JOBS_ENABLED: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((v) => v === 'true'),
+
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
 })
 
