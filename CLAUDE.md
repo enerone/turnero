@@ -39,6 +39,36 @@ npm run dev
 - `DIRECT_URL` — apunta al rol `turnero` (superuser). Solo para migraciones (Prisma) y seed. **Nunca** usar desde código de app.
 - `PUBLIC_BASE_URL` — usada por middleware para saber el dominio base (`turnero.app` en prod, `localhost` en dev).
 
+## Auth (Plan 2)
+
+- **Único identity provider: Google OAuth.** No hay email/password.
+- Scopes: `openid email profile https://www.googleapis.com/auth/calendar`. El calendar scope se pide en el mismo consent aunque Plan 2 no lo use — Plan 3 lo va a necesitar y así el usuario da todos los permisos una sola vez.
+- Sesiones: **Lucia 3** con adapter Prisma. Cookie `auth_session` HttpOnly + Secure en prod.
+- Roles: `owner` (todo) y `secretaria` (opera agenda, no toca config). Chequear con `puede(usuario, accion)` en `lib/auth/puede.ts`.
+- Estado pending-onboarding: cookie firmada+cifrada `turnero_pending_onboarding` con TTL 15 min (iron-session + `SESSION_SECRET`).
+- `refresh_token` de Google: cifrado con AES-256-GCM. Llave por-cuenta derivada de `ENCRYPTION_KEY` vía HKDF-SHA256 con info `turnero.cuenta.<cuentaId>`.
+- Invitación de secretaria: token de un solo uso vía email (Resend). El lookup por token usa una función SQL `SECURITY DEFINER` (`lookup_invitacion_por_token`) que bypasea RLS solo para ese SELECT específico — necesario porque no conocemos el `cuentaId` antes del lookup.
+
+## Setup de Google OAuth (dev)
+
+1. En [Google Cloud Console](https://console.cloud.google.com), creá un proyecto y andá a APIs & Services → Credentials.
+2. Consent screen: External, con tu email como test user.
+3. Create OAuth client ID → Web application.
+4. Authorized redirect URI: `http://localhost:3000/api/auth/google/callback` (o el puerto que uses).
+5. Pegá client ID y secret en `.env`.
+6. Habilitá la **Google Calendar API** en la misma consola (Plan 3 la usa).
+
+En dev sin OAuth real: no podés hacer login vía UI, pero podés usar `/test/login-as` con `{ usuarioId, cuentaId }` para setear una sesión (útil para desarrollar el panel sin auth real). Solo disponible con `NODE_ENV !== 'production'`.
+
+## Onboarding
+
+Tres preguntas al usuario:
+1. Nombre público (visible en el link).
+2. Slug (validado en vivo contra `validarSlug` + reservados).
+3. WhatsApp E.164 del estudio + duración típica de turno.
+
+Todo lo demás se deriva. Los horarios default son L-V 9-13 y 15-18. La `IntegracionCalendar` se crea con `calendar_id_dedicado = null`; Plan 3 (bootstrap-calendar job) la completa.
+
 ## Architecture snapshot (Plan 1: Fundaciones)
 
 - **Next.js 15 App Router** en Node runtime. Middleware (Edge) para resolución de tenant.

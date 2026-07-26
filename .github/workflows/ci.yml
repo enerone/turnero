@@ -29,6 +29,13 @@ jobs:
       DATABASE_URL: postgresql://turnero_app:turnero_app@localhost:5433/turnero?schema=public
       DIRECT_URL: postgresql://turnero:turnero@localhost:5433/turnero?schema=public
       PUBLIC_BASE_URL: http://localhost:3000
+      GOOGLE_CLIENT_ID: test-client-id
+      GOOGLE_CLIENT_SECRET: test-client-secret
+      GOOGLE_OAUTH_REDIRECT: http://localhost:3000/api/auth/google/callback
+      ENCRYPTION_KEY: dGVzdC1lbmNyeXB0aW9uLWtleS0zMi1ieXRlcy1sb25nISE=
+      SESSION_SECRET: test-session-secret-32-chars-or-more-please-yes
+      RESEND_API_KEY: ""
+      NODE_ENV: test
 
     steps:
       - uses: actions/checkout@v4
