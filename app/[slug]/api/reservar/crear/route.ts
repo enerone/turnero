@@ -9,6 +9,7 @@ import { logger } from '@/lib/shared/logger'
 import { enviarEmailConfirmacion } from '@/lib/public-booking/email'
 import { enviarWhatsAppConfirmacion } from '@/lib/public-booking/whatsapp'
 import { escribirAudit } from '@/lib/audit/log'
+import { normalizarTelefonoE164 } from '@/lib/format/telefono'
 
 export const dynamic = 'force-dynamic'
 
@@ -56,7 +57,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Datos inválidos', detalles: parsed.error.flatten() }, { status: 400 })
   }
 
-  const { servicioId, inicio, fin, cliente } = parsed.data
+  const { servicioId, inicio, fin, cliente: clienteRaw } = parsed.data
+  const telefonoNormalizado = normalizarTelefonoE164(clienteRaw.telefono)
+  if (!telefonoNormalizado) {
+    return NextResponse.json({ error: 'Teléfono inválido' }, { status: 400 })
+  }
+  const cliente = { ...clienteRaw, telefono: telefonoNormalizado }
   const inicioDt = new Date(inicio)
   const finDt = new Date(fin)
 

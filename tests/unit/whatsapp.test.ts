@@ -2,9 +2,10 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { normalizarTelefonoWA } from '@/lib/whatsapp'
 
 describe('normalizarTelefonoWA', () => {
-  it('quita espacios, guiones y paréntesis', () => {
+  it('quita espacios/guiones y normaliza a E.164 sin `+`', () => {
     expect(normalizarTelefonoWA('+54 9 11 4567-8900')).toBe('5491145678900')
-    expect(normalizarTelefonoWA('(011) 4567 8900')).toBe('01145678900')
+    // formato local ARG con 0 → se prefija código país
+    expect(normalizarTelefonoWA('(011) 4567 8900')).toBe('541145678900')
   })
 
   it('devuelve null para inputs vacíos o inválidos', () => {

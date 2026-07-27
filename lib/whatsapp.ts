@@ -1,18 +1,16 @@
 import { env } from '@/lib/shared/env'
 import { logger } from '@/lib/shared/logger'
+import { normalizarTelefonoE164 } from '@/lib/format/telefono'
 
 const WA_API_VERSION = 'v20.0'
 
 /**
- * Normaliza un teléfono a formato E.164 sin `+` (WhatsApp Cloud API espera
- * "5491145678900", no "+54 9 11 4567-8900"). Devuelve null si el número
- * quedó vacío o obviamente inválido.
+ * Normaliza a formato WhatsApp Cloud API: E.164 sin `+`. Delega la parte
+ * dura a `normalizarTelefonoE164` y sólo saca el prefijo.
  */
 export function normalizarTelefonoWA(input: string | null | undefined): string | null {
-  if (!input) return null
-  const soloDigitos = input.replace(/\D/g, '')
-  if (soloDigitos.length < 8) return null
-  return soloDigitos
+  const e164 = normalizarTelefonoE164(input)
+  return e164 ? e164.slice(1) : null
 }
 
 export async function enviarWhatsAppTexto(params: {
