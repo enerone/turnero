@@ -105,6 +105,18 @@ describe('Circuito público de reserva', () => {
     })
     expect(turnos2[1].estado).toBe('cancelado')
     expect(turnos2[1].origenCancelacion).toBe('cliente')
+
+    // AuditLog registró las 4 mutations: 2 creados + 1 confirmado + 1 cancelado
+    const audit = await testPrisma.auditLog.findMany({
+      where: { cuentaId: cuenta.id },
+      orderBy: { createdAt: 'asc' },
+    })
+    expect(audit.map((a) => a.accion)).toEqual([
+      'turno_creado',
+      'turno_confirmado',
+      'turno_creado',
+      'turno_cancelado',
+    ])
   })
 
   it('la exclusion constraint bloquea reservas concurrentes en el mismo slot', async () => {

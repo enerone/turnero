@@ -5,6 +5,7 @@ import { TenantNotFoundError, NoTenantInRequestError } from '@/lib/db/errors'
 import { enviarEmailRecordatorio } from '@/lib/public-booking/email'
 import { env } from '@/lib/shared/env'
 import { logger } from '@/lib/shared/logger'
+import { escribirAudit } from '@/lib/audit/log'
 
 export const dynamic = 'force-dynamic'
 
@@ -60,6 +61,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     }),
   ])
 
+  await escribirAudit(db, {
+    accion: 'turno_confirmado',
+    entidad: 'turno',
+    entidadId: tokenRow.turno.id,
+    payload: { canal: 'cliente_via_token', tokenId: tokenRow.id },
+  })
+
   const fechaLocal = turnoActualizado.inicio.toLocaleDateString('es-AR', {
     weekday: 'long', day: 'numeric', month: 'long', timeZone: cuenta.timezone,
   })
@@ -114,6 +122,13 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
       data: { estado: 'cancelado', origenCancelacion: 'cliente' },
     }),
   ])
+
+  await escribirAudit(db, {
+    accion: 'turno_cancelado',
+    entidad: 'turno',
+    entidadId: tokenRow.turno.id,
+    payload: { origen: 'cliente', tokenId: tokenRow.id },
+  })
 
   return NextResponse.json({ ok: true, mensaje: 'Turno cancelado y horario liberado' })
 }

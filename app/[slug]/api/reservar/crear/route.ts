@@ -8,6 +8,7 @@ import { env } from '@/lib/shared/env'
 import { logger } from '@/lib/shared/logger'
 import { enviarEmailConfirmacion } from '@/lib/public-booking/email'
 import { enviarWhatsAppConfirmacion } from '@/lib/public-booking/whatsapp'
+import { escribirAudit } from '@/lib/audit/log'
 
 export const dynamic = 'force-dynamic'
 
@@ -128,6 +129,19 @@ export async function POST(req: NextRequest) {
       tokenHash,
       expiraEn,
     } as any,
+  })
+
+  await escribirAudit(db, {
+    accion: 'turno_creado',
+    entidad: 'turno',
+    entidadId: turno.id,
+    payload: {
+      clienteId: clienteDb.id,
+      servicioId,
+      inicio: inicioDt.toISOString(),
+      fin: finDt.toISOString(),
+      canal: 'public_booking',
+    },
   })
 
   const confirmUrl = `${env.PUBLIC_BASE_URL}/${cuenta.slug}/confirmar/${token}`
