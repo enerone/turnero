@@ -10,10 +10,11 @@ import {
   handler as handlerRecordatorio,
   NOMBRE_JOB_RECORDATORIO,
 } from './handlers/recordatorio'
+import {
+  handler as handlerOutbox,
+  NOMBRE_JOB_OUTBOX,
+} from './handlers/procesar-outbox'
 
-/**
- * Mapa de todos los jobs registrados. Extender acá cuando se agreguen jobs nuevos.
- */
 const REGISTRO: Array<{
   nombre: string
   handler: (data: unknown) => Promise<void>
@@ -26,12 +27,16 @@ const REGISTRO: Array<{
     nombre: NOMBRE_JOB_RECORDATORIO,
     handler: () => handlerRecordatorio(),
   },
+  {
+    nombre: NOMBRE_JOB_OUTBOX,
+    handler: () => handlerOutbox(),
+  },
 ]
 
 let registrado = false
 
-// Cron: todos los días a las 09:00 UTC (~06:00 ARG). pg-boss usa cron syntax estándar.
-const CRON_RECORDATORIO = '0 9 * * *'
+const CRON_RECORDATORIO = '0 9 * * *' // 09:00 UTC = 06:00 ARG
+const CRON_OUTBOX = '* * * * *' // cada minuto
 
 export async function registrarHandlers(): Promise<void> {
   if (registrado) return
@@ -55,5 +60,12 @@ export async function registrarHandlers(): Promise<void> {
     logger.info({ cron: CRON_RECORDATORIO }, 'Recordatorio diario agendado')
   } catch (err) {
     logger.error({ err }, 'Error agendando cron de recordatorio')
+  }
+
+  try {
+    await boss.schedule(NOMBRE_JOB_OUTBOX, CRON_OUTBOX, {}, { tz: 'UTC' })
+    logger.info({ cron: CRON_OUTBOX }, 'Outbox worker agendado')
+  } catch (err) {
+    logger.error({ err }, 'Error agendando cron de outbox')
   }
 }

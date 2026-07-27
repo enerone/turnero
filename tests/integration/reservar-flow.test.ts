@@ -5,16 +5,9 @@ import { testPrisma, useTestDatabase } from './helpers/db'
 import { crearCuentaFixture, crearServicioFixture } from './helpers/fixtures'
 import { NextRequest } from 'next/server'
 
-// El circuito público no dispara email/WhatsApp reales en test: no hay creds
-// seteadas → los helpers hacen no-op y loguean. Igual mockeamos por si acaso.
-vi.mock('@/lib/public-booking/email', () => ({
-  enviarEmailConfirmacion: vi.fn().mockResolvedValue(undefined),
-  enviarEmailRecordatorio: vi.fn().mockResolvedValue(undefined),
-}))
-vi.mock('@/lib/public-booking/whatsapp', () => ({
-  enviarWhatsAppConfirmacion: vi.fn().mockResolvedValue(undefined),
-  enviarWhatsAppRecordatorio: vi.fn().mockResolvedValue(undefined),
-}))
+// Las notificaciones se encolan en `outbox_mensaje` (patrón outbox). El
+// procesamiento real vive en `procesar-outbox` handler y no lo ejercitamos
+// desde este test — sí verificamos que se hayan encolado las filas correctas.
 
 // getTenant() lee `x-tenant-slug` de `headers()` (Server Component API). Para
 // route handlers en test, mockeamos `next/headers` con el slug de turno.
@@ -117,6 +110,20 @@ describe('Circuito público de reserva', () => {
       'turno_creado',
       'turno_cancelado',
     ])
+
+    // Outbox: cada crear encola email + WA (2×2=4), cada confirmar encola
+    // email (1), cancelar encola WA al owner si hay telefonoWhatsapp (0 aquí).
+    const outbox = await testPrisma.outboxMensaje.findMany({
+      where: { cuentaId: cuenta.id },
+      orderBy: { createdAt: 'asc' },
+    })
+    const tipos = outbox.map((o) => o.tipo)
+    expect(tipos.filter((t) => t === 'email_transaccional').length).toBeGreaterThanOrEqual(2)
+    expect(tipos.filter((t) => t === 'whatsapp').length).toBeGreaterThanOrEqual(2)
+    for (const m of outbox) {
+      expect(m.estado).toBe('pendiente')
+      expect(m.intentos).toBe(0)
+    }
   })
 
   it('la exclusion constraint bloquea reservas concurrentes en el mismo slot', async () => {

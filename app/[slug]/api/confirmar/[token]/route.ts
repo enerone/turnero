@@ -2,12 +2,11 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { createHash } from 'node:crypto'
 import { getTenant } from '@/lib/tenant/resolve'
 import { TenantNotFoundError, NoTenantInRequestError } from '@/lib/db/errors'
-import { enviarEmailRecordatorio } from '@/lib/public-booking/email'
-import { enviarWhatsAppTexto } from '@/lib/whatsapp'
 import { env } from '@/lib/shared/env'
 import { logger } from '@/lib/shared/logger'
 import { escribirAudit } from '@/lib/audit/log'
 import { formatearFechaLocal, formatearHoraLocal, formatearFechaHoraLocal } from '@/lib/format/fecha'
+import { encolarEmail, encolarWhatsApp } from '@/lib/outbox/encolar'
 
 export const dynamic = 'force-dynamic'
 
@@ -73,18 +72,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   const fechaLocal = formatearFechaLocal(turnoActualizado.inicio, cuenta.timezone)
   const horaLocal = formatearHoraLocal(turnoActualizado.inicio, cuenta.timezone)
   const cancelUrl = `${env.PUBLIC_BASE_URL}/${cuenta.slug}/confirmar/${token}`
+  const clienteEmail = tokenRow.turno.cliente?.email
 
-  try {
-    await enviarEmailRecordatorio({
-      to: tokenRow.turno.cliente?.email ?? '',
-      cuentaNombre: cuenta.nombrePublico,
-      servicio: tokenRow.turno.servicio.nombre,
-      fecha: fechaLocal,
-      hora: horaLocal,
-      cancelUrl,
+  if (clienteEmail) {
+    await encolarEmail(db, {
+      destinatario: clienteEmail,
+      asunto: `Tu turno en ${cuenta.nombrePublico} está confirmado`,
+      cuerpoHtml: `
+        <p>Hola,</p>
+        <p>Tu turno en <strong>${cuenta.nombrePublico}</strong> fue confirmado.</p>
+        <p><strong>${tokenRow.turno.servicio.nombre}</strong> · ${fechaLocal} a las ${horaLocal}</p>
+        <p>Si no podés ir, cancelá desde <a href="${cancelUrl}">este link</a> y liberás el horario para otra persona.</p>
+      `,
     })
-  } catch (err) {
-    logger.warn({ err, turnoId: tokenRow.turno.id }, 'No se pudo enviar recordatorio post-confirmación')
   }
 
   return NextResponse.json({ ok: true, turnoId: tokenRow.turno.id })
@@ -128,27 +128,21 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     payload: { origen: 'cliente', tokenId: tokenRow.id },
   })
 
-  // Aviso al owner: el profesional necesita saber que se le liberó un slot.
-  // Best-effort: si falla, seguimos — el turno ya está cancelado en DB.
-  try {
-    const dueño = await db.usuario.findFirst({ where: { rol: 'owner' } })
-    const nombreCliente = tokenRow.turno.cliente?.nombre ?? 'un cliente'
-    const cuando = formatearFechaHoraLocal(tokenRow.turno.inicio, cuenta.timezone)
-    const mensaje = `Se canceló un turno: ${nombreCliente} para ${cuando} (${tokenRow.turno.servicio.nombre}). El horario quedó libre.`
+  // Aviso al owner: encolamos en outbox para no bloquear la request.
+  const dueño = await db.usuario.findFirst({ where: { rol: 'owner' } })
+  const nombreCliente = tokenRow.turno.cliente?.nombre ?? 'un cliente'
+  const cuando = formatearFechaHoraLocal(tokenRow.turno.inicio, cuenta.timezone)
+  const mensaje = `Se canceló un turno: ${nombreCliente} para ${cuando} (${tokenRow.turno.servicio.nombre}). El horario quedó libre.`
 
-    if (cuenta.telefonoWhatsapp) {
-      await enviarWhatsAppTexto({ to: cuenta.telefonoWhatsapp, body: mensaje })
-    }
-    if (dueño?.email) {
-      const { enviarEmailAviso } = await import('@/lib/public-booking/email')
-      await enviarEmailAviso({
-        to: dueño.email,
-        asunto: `Turno cancelado en ${cuenta.nombrePublico}`,
-        cuerpoHtml: `<p>${mensaje}</p>`,
-      })
-    }
-  } catch (err) {
-    logger.warn({ err, cuentaId: cuenta.id, turnoId: tokenRow.turno.id }, 'No se pudo avisar al owner sobre cancelación')
+  if (cuenta.telefonoWhatsapp) {
+    await encolarWhatsApp(db, { destinatario: cuenta.telefonoWhatsapp, cuerpo: mensaje })
+  }
+  if (dueño?.email) {
+    await encolarEmail(db, {
+      destinatario: dueño.email,
+      asunto: `Turno cancelado en ${cuenta.nombrePublico}`,
+      cuerpoHtml: `<p>${mensaje}</p>`,
+    })
   }
 
   return NextResponse.json({ ok: true, mensaje: 'Turno cancelado y horario liberado' })

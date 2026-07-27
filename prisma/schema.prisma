@@ -32,6 +32,7 @@ model Cuenta {
   auditLogs            AuditLog[]
   invitaciones         Invitacion[]
   tokensConfirmacion   TokenConfirmacion[]
+  mensajesOutbox       OutboxMensaje[]
 
   @@map("cuenta")
 }
@@ -214,6 +215,41 @@ model Turno {
   @@index([cuentaId, inicio])
   @@index([cuentaId, googleEventId])
   @@map("turno")
+}
+
+enum EstadoOutbox {
+  pendiente
+  procesado
+  fallado
+
+  @@map("estado_outbox")
+}
+
+enum TipoOutboxMensaje {
+  email_transaccional
+  whatsapp
+
+  @@map("tipo_outbox_mensaje")
+}
+
+model OutboxMensaje {
+  id                String              @id @default(uuid()) @db.Uuid
+  cuentaId          String              @map("cuenta_id") @db.Uuid
+  tipo              TipoOutboxMensaje
+  destinatario      String
+  payload           Json
+  estado            EstadoOutbox        @default(pendiente)
+  intentos          Int                 @default(0)
+  siguienteIntento  DateTime            @default(now()) @map("siguiente_intento") @db.Timestamptz(6)
+  procesadoEn       DateTime?           @map("procesado_en") @db.Timestamptz(6)
+  ultimoError       String?             @map("ultimo_error")
+  createdAt         DateTime            @default(now()) @map("created_at")
+
+  cuenta Cuenta @relation(fields: [cuentaId], references: [id], onDelete: Cascade)
+
+  @@index([estado, siguienteIntento])
+  @@index([cuentaId])
+  @@map("outbox_mensaje")
 }
 
 model TokenConfirmacion {

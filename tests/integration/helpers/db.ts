@@ -11,6 +11,7 @@ export const testPrisma = new PrismaClient({
 })
 
 const TABLES_TO_TRUNCATE = [
+  'outbox_mensaje',
   'token_confirmacion',
   'invitacion',
   'audit_log',

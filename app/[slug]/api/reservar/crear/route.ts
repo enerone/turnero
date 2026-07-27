@@ -6,11 +6,10 @@ import { getTenant } from '@/lib/tenant/resolve'
 import { TenantNotFoundError, NoTenantInRequestError } from '@/lib/db/errors'
 import { env } from '@/lib/shared/env'
 import { logger } from '@/lib/shared/logger'
-import { enviarEmailConfirmacion } from '@/lib/public-booking/email'
-import { enviarWhatsAppConfirmacion } from '@/lib/public-booking/whatsapp'
 import { escribirAudit } from '@/lib/audit/log'
 import { normalizarTelefonoE164 } from '@/lib/format/telefono'
 import { formatearFechaLocal, formatearHoraLocal } from '@/lib/format/fecha'
+import { encolarEmail, encolarWhatsApp } from '@/lib/outbox/encolar'
 
 export const dynamic = 'force-dynamic'
 
@@ -155,35 +154,30 @@ export async function POST(req: NextRequest) {
   const fechaLocal = formatearFechaLocal(inicioDt, cuenta.timezone)
   const horaLocal = formatearHoraLocal(inicioDt, cuenta.timezone)
 
-  try {
-    if (cliente.email) {
-      await enviarEmailConfirmacion({
-        to: cliente.email,
-        cuentaNombre: cuenta.nombrePublico,
-        confirmUrl,
-        servicio: servicio.nombre,
-        fecha: fechaLocal,
-        hora: horaLocal,
-      })
-    }
-  } catch (err) {
-    logger.warn({ err, turnoId: turno.id }, 'No se pudo enviar email de confirmación')
-  }
-
-  try {
-    await enviarWhatsAppConfirmacion({
-      to: cliente.telefono,
-      cuentaNombre: cuenta.nombrePublico,
-      confirmUrl,
-      servicio: servicio.nombre,
-      fecha: fechaLocal,
-      hora: horaLocal,
+  // Encolamos las notificaciones en la outbox — el worker las despacha con
+  // reintento + backoff. Ventajas vs. envío inline:
+  // 1. Idempotencia: retry del cliente no manda dos emails.
+  // 2. Recovery: si Resend/Meta caen, se reintenta después.
+  // 3. Latencia: la request devuelve al cliente sin esperar red externa.
+  if (cliente.email) {
+    await encolarEmail(db, {
+      destinatario: cliente.email,
+      asunto: `Confirmá tu turno en ${cuenta.nombrePublico}`,
+      cuerpoHtml: `
+        <p>Hola,</p>
+        <p>Tenés un turno pendiente de confirmación en <strong>${cuenta.nombrePublico}</strong>.</p>
+        <p><strong>${servicio.nombre}</strong> · ${fechaLocal} a las ${horaLocal}</p>
+        <p><a href="${confirmUrl}" style="display:inline-block;padding:0.75rem 1.5rem;background:#0ea5e9;color:#fff;text-decoration:none;border-radius:4px;font-weight:600;">Confirmar mi turno</a></p>
+        <p>El link expira en 30 minutos. Si no podés ir, cancelá desde el mismo link para liberar el horario.</p>
+      `,
     })
-  } catch (err) {
-    logger.warn({ err, turnoId: turno.id }, 'No se pudo enviar WhatsApp de confirmación')
   }
+  await encolarWhatsApp(db, {
+    destinatario: cliente.telefono,
+    cuerpo: `Hola! Tenés un turno pendiente de confirmación en ${cuenta.nombrePublico}.\n\n${servicio.nombre}\n${fechaLocal} a las ${horaLocal}\n\nConfirmá acá: ${confirmUrl}\n\nEl link expira en 30 min. Si no vas a venir, cancelalo desde el mismo link.`,
+  })
 
-  logger.info({ turnoId: turno.id, cuentaId: cuenta.id }, 'Turno borrador creado, token enviado')
+  logger.info({ turnoId: turno.id, cuentaId: cuenta.id }, 'Turno borrador creado, notificaciones encoladas')
 
   return NextResponse.json({
     ok: true,

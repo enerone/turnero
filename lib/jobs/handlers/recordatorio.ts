@@ -1,11 +1,10 @@
 import { randomBytes, createHash } from 'node:crypto'
 import { basePrisma } from '@/lib/db/base-prisma'
 import { createTenantClient } from '@/lib/db/tenant-client'
-import { enviarEmailRecordatorio } from '@/lib/public-booking/email'
-import { enviarWhatsAppRecordatorio } from '@/lib/public-booking/whatsapp'
 import { env } from '@/lib/shared/env'
 import { logger } from '@/lib/shared/logger'
 import { formatearFechaLocal, formatearHoraLocal } from '@/lib/format/fecha'
+import { encolarEmail, encolarWhatsApp } from '@/lib/outbox/encolar'
 
 export const NOMBRE_JOB_RECORDATORIO = 'recordatorio-diario'
 
@@ -26,11 +25,12 @@ async function crearTokenParaRecordatorio(
 
 /**
  * Corre diario. Busca turnos confirmados que arrancan en las próximas 24h y
- * NO tienen recordatorio ya enviado. Manda por email + WhatsApp y marca
- * `recordatorio_enviado_en = now()` para idempotencia.
+ * NO tienen recordatorio ya enviado. Encola email + WhatsApp en la outbox y
+ * marca `recordatorio_enviado_en = now()` para idempotencia.
  *
- * Si el turno se mueve (update de inicio/fin), el caller es responsable de
- * resetear el flag a null — pendiente para cuando exista panel edit.
+ * Encolar en outbox (en vez de enviar inline) desacopla este cron de la
+ * disponibilidad de Resend/Meta y lo hace idempotente vs reintentos de
+ * proveedores.
  */
 export async function handler(): Promise<void> {
   const ahora = new Date()
@@ -66,35 +66,24 @@ export async function handler(): Promise<void> {
       const token = await crearTokenParaRecordatorio(db, turno.id)
       const cancelUrl = `${env.PUBLIC_BASE_URL}/${cuenta.slug}/confirmar/${token}`
 
-      try {
-        await enviarEmailRecordatorio({
-          to: turno.cliente.email ?? '',
-          cuentaNombre: cuenta.nombrePublico,
-          servicio: turno.servicio.nombre,
-          fecha,
-          hora,
-          cancelUrl,
+      if (turno.cliente.email) {
+        await encolarEmail(db, {
+          destinatario: turno.cliente.email,
+          asunto: `Recordatorio: tu turno en ${cuenta.nombrePublico}`,
+          cuerpoHtml: `
+            <p>Hola ${turno.cliente.nombre},</p>
+            <p>Te recordamos tu turno en <strong>${cuenta.nombrePublico}</strong>.</p>
+            <p><strong>${turno.servicio.nombre}</strong> · ${fecha} a las ${hora}</p>
+            <p>Si no podés ir, cancelá desde <a href="${cancelUrl}">este link</a> y liberás el horario.</p>
+          `,
         })
-      } catch (err) {
-        logger.error({ err, turnoId: turno.id }, 'Error enviando email de recordatorio')
       }
 
-      try {
-        await enviarWhatsAppRecordatorio({
-          to: turno.cliente.telefono,
-          cuentaNombre: cuenta.nombrePublico,
-          servicio: turno.servicio.nombre,
-          fecha,
-          hora,
-          cancelUrl,
-        })
-      } catch (err) {
-        logger.error({ err, turnoId: turno.id }, 'Error enviando WhatsApp de recordatorio')
-      }
+      await encolarWhatsApp(db, {
+        destinatario: turno.cliente.telefono,
+        cuerpo: `Recordatorio: tu turno en ${cuenta.nombrePublico} es ${fecha} a las ${hora} (${turno.servicio.nombre}).\n\nSi no podés venir, cancelalo acá: ${cancelUrl}`,
+      })
 
-      // Marcamos como enviado independientemente del resultado de cada canal.
-      // Si ambos fallan, el error queda en logs — no reintentamos para no
-      // spamear al cliente.
       await db.turno.update({
         where: { id: turno.id },
         data: { recordatorioEnviadoEn: new Date() },
@@ -104,5 +93,5 @@ export async function handler(): Promise<void> {
     }
   }
 
-  logger.info({ totalTurnos, totalEnviados, cuentas: cuentas.length }, 'Recordatorios procesados')
+  logger.info({ totalTurnos, totalEnviados, cuentas: cuentas.length }, 'Recordatorios encolados')
 }
