@@ -1,3 +1,4 @@
+import { randomBytes, createHash } from 'node:crypto'
 import { basePrisma } from '@/lib/db/base-prisma'
 import { createTenantClient } from '@/lib/db/tenant-client'
 import { enviarEmailRecordatorio } from '@/lib/public-booking/email'
@@ -19,14 +20,26 @@ function formatFechaLocal(inicio: Date, timezone: string): { fecha: string; hora
   return { fecha, hora }
 }
 
+async function crearTokenParaRecordatorio(
+  db: ReturnType<typeof createTenantClient>,
+  turnoId: string,
+): Promise<string> {
+  const raw = randomBytes(32).toString('base64url')
+  const tokenHash = createHash('sha256').update(raw).digest('hex')
+  const expira = new Date(Date.now() + 25 * 60 * 60 * 1000) // cubre hasta después del turno
+  await db.tokenConfirmacion.create({
+    data: { turnoId, tokenHash, expiraEn: expira } as any,
+  })
+  return raw
+}
+
 /**
  * Corre diario. Busca turnos confirmados que arrancan en las próximas 24h y
- * manda recordatorio por email + WhatsApp.
+ * NO tienen recordatorio ya enviado. Manda por email + WhatsApp y marca
+ * `recordatorio_enviado_en = now()` para idempotencia.
  *
- * TODO idempotencia: agregar columna `recordatorio_enviado_en` en `Turno` para
- * que dos corridas del mismo día no manden dos mensajes al mismo cliente.
- * Por ahora si el cron corre dos veces en el mismo día, el cliente recibe dos.
- * (Va con el schema-change de Lote 2.)
+ * Si el turno se mueve (update de inicio/fin), el caller es responsable de
+ * resetear el flag a null — pendiente para cuando exista panel edit.
  */
 export async function handler(): Promise<void> {
   const ahora = new Date()
@@ -46,6 +59,7 @@ export async function handler(): Promise<void> {
       where: {
         estado: 'confirmado',
         inicio: { gte: ahora, lte: en24h },
+        recordatorioEnviadoEn: null,
       },
       include: { cliente: true, servicio: true },
     })
@@ -56,7 +70,8 @@ export async function handler(): Promise<void> {
       if (!turno.cliente) continue
 
       const { fecha, hora } = formatFechaLocal(turno.inicio, cuenta.timezone || TZ_DEFAULT)
-      const cancelUrl = `${env.PUBLIC_BASE_URL}/${cuenta.slug}/confirmar/${turno.id}`
+      const token = await crearTokenParaRecordatorio(db, turno.id)
+      const cancelUrl = `${env.PUBLIC_BASE_URL}/${cuenta.slug}/confirmar/${token}`
 
       try {
         await enviarEmailRecordatorio({
@@ -83,6 +98,14 @@ export async function handler(): Promise<void> {
       } catch (err) {
         logger.error({ err, turnoId: turno.id }, 'Error enviando WhatsApp de recordatorio')
       }
+
+      // Marcamos como enviado independientemente del resultado de cada canal.
+      // Si ambos fallan, el error queda en logs — no reintentamos para no
+      // spamear al cliente.
+      await db.turno.update({
+        where: { id: turno.id },
+        data: { recordatorioEnviadoEn: new Date() },
+      })
 
       totalEnviados += 1
     }

@@ -62,6 +62,11 @@ describe('Circuito público de reserva', () => {
     expect(turnos).toHaveLength(1)
     expect(turnos[0].estado).toBe('borrador')
 
+    // Debe haber un TokenConfirmacion vivo
+    const tokensPre = await testPrisma.tokenConfirmacion.findMany({ where: { cuentaId: cuenta.id } })
+    expect(tokensPre).toHaveLength(1)
+    expect(tokensPre[0].usadaEn).toBeNull()
+
     // 2. Confirmar
     const reqConfirmar = new NextRequest(`http://localhost/${cuenta.slug}/api/confirmar/${token}`, {
       method: 'POST',
@@ -71,13 +76,12 @@ describe('Circuito público de reserva', () => {
 
     const turnoConfirmado = await testPrisma.turno.findUnique({ where: { id: turnos[0].id } })
     expect(turnoConfirmado?.estado).toBe('confirmado')
-    // El hash del token debe haber sido purgado de notas
-    expect(turnoConfirmado?.notas).not.toContain('token_confirmacion_hash')
 
-    // 3. Cancelar (con el mismo token) — para eso el flow reintroduce el hash
-    // en notas al cancelar? No: cancelar necesita el token todavía. Cambiamos:
-    // el endpoint DELETE busca por hash; después de confirmar, el hash ya no
-    // está. Reservamos otro turno para probar cancel via link.
+    // El token debe estar marcado como usado
+    const tokensPost = await testPrisma.tokenConfirmacion.findMany({ where: { cuentaId: cuenta.id } })
+    expect(tokensPost[0].usadaEn).not.toBeNull()
+
+    // 3. Cancelar — reservamos otro turno con nuevo token
     const inicio2 = new Date(inicio.getTime() + 2 * 60 * 60 * 1000)
     const fin2 = new Date(inicio2.getTime() + 30 * 60 * 1000)
     const res2 = await postReservar(makePost({
@@ -101,6 +105,33 @@ describe('Circuito público de reserva', () => {
     })
     expect(turnos2[1].estado).toBe('cancelado')
     expect(turnos2[1].origenCancelacion).toBe('cliente')
+  })
+
+  it('la exclusion constraint bloquea reservas concurrentes en el mismo slot', async () => {
+    const cuenta = await crearCuentaFixture(testPrisma)
+    currentSlug = cuenta.slug
+    const servicio = await crearServicioFixture(testPrisma, cuenta.id)
+
+    const inicio = new Date(Date.now() + 24 * 60 * 60 * 1000)
+    inicio.setMinutes(0, 0, 0)
+    const fin = new Date(inicio.getTime() + 30 * 60 * 1000)
+
+    const body = {
+      servicioId: servicio.id,
+      inicio: inicio.toISOString(),
+      fin: fin.toISOString(),
+      cliente: { nombre: 'A', telefono: '+5491199999901' },
+    }
+    // Disparar 2 requests concurrentes al mismo slot
+    const [r1, r2] = await Promise.all([
+      postReservar(makePost(body)),
+      postReservar(makePost({ ...body, cliente: { nombre: 'B', telefono: '+5491199999902' } })),
+    ])
+    const statuses = [r1.status, r2.status].sort()
+    expect(statuses).toEqual([200, 409])
+
+    const turnos = await testPrisma.turno.findMany({ where: { cuentaId: cuenta.id } })
+    expect(turnos).toHaveLength(1)
   })
 
   it('rechaza reserva con horario ya tomado', async () => {

@@ -32,9 +32,9 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: `Rango máximo ${MAX_DIAS} días` }, { status: 400 })
   }
 
-  let db
+  let cuenta, db
   try {
-    ({ db } = await getTenant())
+    ({ cuenta, db } = await getTenant())
   } catch (e) {
     if (e instanceof TenantNotFoundError || e instanceof NoTenantInRequestError) {
       return NextResponse.json({ error: 'Tenant no encontrado' }, { status: 404 })
@@ -42,7 +42,12 @@ export async function GET(req: Request) {
     throw e
   }
 
-  const disponibilidad = await calcularDisponibilidad(db, { desde, hasta, servicioId: parsed.data.servicioId })
+  const disponibilidad = await calcularDisponibilidad(db, {
+    desde,
+    hasta,
+    servicioId: parsed.data.servicioId,
+    timezone: cuenta.timezone,
+  })
 
   return NextResponse.json({
     disponibilidad: disponibilidad.map((d) => ({

@@ -31,6 +31,7 @@ model Cuenta {
   eventosExternos      EventoExterno[]
   auditLogs            AuditLog[]
   invitaciones         Invitacion[]
+  tokensConfirmacion   TokenConfirmacion[]
 
   @@map("cuenta")
 }
@@ -189,28 +190,47 @@ enum OrigenCancelacion {
 }
 
 model Turno {
-  id                 String             @id @default(uuid()) @db.Uuid
-  cuentaId           String             @map("cuenta_id") @db.Uuid
-  clienteId          String?            @map("cliente_id") @db.Uuid
-  servicioId         String             @map("servicio_id") @db.Uuid
-  inicio             DateTime           @db.Timestamptz(6)
-  fin                DateTime           @db.Timestamptz(6)
-  estado             EstadoTurno        @default(confirmado)
-  googleEventId      String?            @map("google_event_id")
-  googleEventEtag    String?            @map("google_event_etag")
-  origen             OrigenTurno        @default(turnero)
-  origenCancelacion  OrigenCancelacion? @map("origen_cancelacion")
-  notas              String             @default("")
-  createdAt          DateTime           @default(now()) @map("created_at")
-  updatedAt          DateTime           @updatedAt @map("updated_at")
+  id                     String             @id @default(uuid()) @db.Uuid
+  cuentaId               String             @map("cuenta_id") @db.Uuid
+  clienteId              String?            @map("cliente_id") @db.Uuid
+  servicioId             String             @map("servicio_id") @db.Uuid
+  inicio                 DateTime           @db.Timestamptz(6)
+  fin                    DateTime           @db.Timestamptz(6)
+  estado                 EstadoTurno        @default(confirmado)
+  googleEventId          String?            @map("google_event_id")
+  googleEventEtag        String?            @map("google_event_etag")
+  origen                 OrigenTurno        @default(turnero)
+  origenCancelacion      OrigenCancelacion? @map("origen_cancelacion")
+  notas                  String             @default("")
+  recordatorioEnviadoEn  DateTime?          @map("recordatorio_enviado_en") @db.Timestamptz(6)
+  createdAt              DateTime           @default(now()) @map("created_at")
+  updatedAt              DateTime           @updatedAt @map("updated_at")
 
   cuenta   Cuenta    @relation(fields: [cuentaId], references: [id], onDelete: Cascade)
   cliente  Cliente?  @relation(fields: [clienteId], references: [id], onDelete: SetNull)
   servicio Servicio  @relation(fields: [servicioId], references: [id], onDelete: Restrict)
+  tokensConfirmacion TokenConfirmacion[]
 
   @@index([cuentaId, inicio])
   @@index([cuentaId, googleEventId])
   @@map("turno")
+}
+
+model TokenConfirmacion {
+  id         String    @id @default(uuid()) @db.Uuid
+  cuentaId   String    @map("cuenta_id") @db.Uuid
+  turnoId    String    @map("turno_id") @db.Uuid
+  tokenHash  String    @unique @map("token_hash")
+  expiraEn   DateTime  @map("expira_en") @db.Timestamptz(6)
+  usadaEn    DateTime? @map("usada_en") @db.Timestamptz(6)
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  cuenta Cuenta @relation(fields: [cuentaId], references: [id], onDelete: Cascade)
+  turno  Turno  @relation(fields: [turnoId], references: [id], onDelete: Cascade)
+
+  @@index([cuentaId, turnoId])
+  @@index([expiraEn])
+  @@map("token_confirmacion")
 }
 
 model EventoExterno {

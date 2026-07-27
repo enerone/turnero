@@ -5,8 +5,6 @@ import { ConfirmarToken } from './ConfirmarToken'
 
 export const dynamic = 'force-dynamic'
 
-const TOKEN_PATTERN = /token_confirmacion_hash:([a-f0-9]+);expira:([^;]+)/
-
 function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex')
 }
@@ -16,20 +14,15 @@ export default async function ConfirmarPage({ params }: { params: Promise<{ slug
   const { cuenta, db } = await getTenant()
   const tokenHash = hashToken(token)
 
-  const turno = await db.turno.findFirst({
-    where: {
-      notas: { contains: `token_confirmacion_hash:${tokenHash}` },
-      estado: { in: ['borrador', 'confirmado'] },
-    },
-    include: { servicio: true, cliente: true },
+  const tokenRow = await db.tokenConfirmacion.findFirst({
+    where: { tokenHash },
+    include: { turno: { include: { servicio: true, cliente: true } } },
   })
 
-  if (!turno) notFound()
+  if (!tokenRow || !tokenRow.turno) notFound()
 
-  const match = turno.notas.match(TOKEN_PATTERN)
-  if (!match) notFound()
-
-  const expira = new Date(match[2])
+  const turno = tokenRow.turno
+  const expira = tokenRow.expiraEn
   const yaExpirado = turno.estado === 'borrador' && expira < new Date()
 
   if (yaExpirado) {

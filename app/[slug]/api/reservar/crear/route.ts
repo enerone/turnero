@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { randomBytes, createHash } from 'node:crypto'
+import { Prisma } from '@prisma/client'
 import { z } from 'zod'
 import { getTenant } from '@/lib/tenant/resolve'
 import { TenantNotFoundError, NoTenantInRequestError } from '@/lib/db/errors'
@@ -27,12 +28,6 @@ function generarToken(): string {
   return randomBytes(32).toString('base64url')
 }
 
-/**
- * Guardamos el HASH del token en `notas` (no el token en claro) para que aunque
- * un attacker con acceso DB lea las filas, no pueda reenviar el link. La tabla
- * `TokenConfirmacion` dedicada llega en Lote 2 — por ahora hash + índice es un
- * fix mínimo.
- */
 function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex')
 }
@@ -76,22 +71,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Servicio no disponible' }, { status: 404 })
   }
 
-  const conflicto = await db.turno.findFirst({
-    where: {
-      servicioId,
-      inicio: { lt: finDt },
-      fin: { gt: inicioDt },
-      estado: { in: ['confirmado', 'borrador'] },
-    },
-  })
-  if (conflicto) {
-    return NextResponse.json({ error: 'El horario ya no está disponible' }, { status: 409 })
-  }
-
   let clienteDb = await db.cliente.findFirst({ where: { telefono: cliente.telefono } })
   if (!clienteDb) {
     clienteDb = await db.cliente.create({
-      // tenant client inyecta cuentaId en runtime; los tipos no lo saben
       data: {
         nombre: cliente.nombre,
         telefono: cliente.telefono,
@@ -109,18 +91,42 @@ export async function POST(req: NextRequest) {
   }
 
   const token = generarToken()
-  const expiraEn = new Date(Date.now() + TOKEN_TTL_MS)
   const tokenHash = hashToken(token)
+  const expiraEn = new Date(Date.now() + TOKEN_TTL_MS)
 
-  const turno = await db.turno.create({
+  // La exclusion constraint `turno_no_overlap` garantiza atomicidad: si dos
+  // requests concurrentes intentan el mismo slot, el segundo INSERT falla con
+  // 23P01 (exclusion_violation). Ya no hace falta el findFirst previo.
+  let turno
+  try {
+    turno = await db.turno.create({
+      data: {
+        clienteId: clienteDb.id,
+        servicioId,
+        inicio: inicioDt,
+        fin: finDt,
+        estado: 'borrador',
+        origen: 'turnero',
+      } as any,
+    })
+  } catch (err) {
+    if (
+      err instanceof Prisma.PrismaClientKnownRequestError &&
+      String((err.meta as { code?: string } | undefined)?.code) === '23P01'
+    ) {
+      return NextResponse.json({ error: 'El horario ya no está disponible' }, { status: 409 })
+    }
+    if (err instanceof Error && /exclusion_violation|turno_no_overlap|23P01/.test(err.message)) {
+      return NextResponse.json({ error: 'El horario ya no está disponible' }, { status: 409 })
+    }
+    throw err
+  }
+
+  await db.tokenConfirmacion.create({
     data: {
-      clienteId: clienteDb.id,
-      servicioId,
-      inicio: inicioDt,
-      fin: finDt,
-      estado: 'borrador',
-      origen: 'turnero',
-      notas: `token_confirmacion_hash:${tokenHash};expira:${expiraEn.toISOString()}`,
+      turnoId: turno.id,
+      tokenHash,
+      expiraEn,
     } as any,
   })
 

@@ -8,8 +8,6 @@ import { logger } from '@/lib/shared/logger'
 
 export const dynamic = 'force-dynamic'
 
-const TOKEN_PATTERN = /token_confirmacion_hash:([a-f0-9]+);expira:([^;]+)/
-
 function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex')
 }
@@ -33,57 +31,57 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
 
   const tokenHash = hashToken(token)
 
-  const turno = await db.turno.findFirst({
-    where: {
-      notas: { contains: `token_confirmacion_hash:${tokenHash}` },
-      estado: 'borrador',
-    },
-    include: { servicio: true, cliente: true },
+  const tokenRow = await db.tokenConfirmacion.findFirst({
+    where: { tokenHash },
+    include: { turno: { include: { servicio: true, cliente: true } } },
   })
 
-  if (!turno) {
-    return NextResponse.json({ error: 'Token inválido o turno ya confirmado' }, { status: 404 })
+  if (!tokenRow || !tokenRow.turno) {
+    return NextResponse.json({ error: 'Token inválido' }, { status: 404 })
   }
-
-  const match = turno.notas.match(TOKEN_PATTERN)
-  if (!match) {
-    return NextResponse.json({ error: 'Token inválido' }, { status: 400 })
+  if (tokenRow.usadaEn) {
+    return NextResponse.json({ error: 'Token ya usado' }, { status: 410 })
   }
-  const expira = new Date(match[2])
-  if (expira < new Date()) {
+  if (tokenRow.expiraEn < new Date()) {
     return NextResponse.json({ error: 'Token expirado' }, { status: 410 })
   }
+  if (tokenRow.turno.estado !== 'borrador' && tokenRow.turno.estado !== 'confirmado') {
+    return NextResponse.json({ error: 'Turno no está en estado confirmable' }, { status: 409 })
+  }
 
-  await db.turno.update({
-    where: { id: turno.id },
-    data: {
-      estado: 'confirmado',
-      notas: turno.notas.replace(TOKEN_PATTERN, '').replace(/^;+|;+$/g, ''),
-    },
-  })
+  const [, turnoActualizado] = await db.$transaction([
+    db.tokenConfirmacion.update({
+      where: { id: tokenRow.id },
+      data: { usadaEn: new Date() },
+    }),
+    db.turno.update({
+      where: { id: tokenRow.turno.id },
+      data: { estado: 'confirmado' },
+    }),
+  ])
 
-  const fechaLocal = turno.inicio.toLocaleDateString('es-AR', {
+  const fechaLocal = turnoActualizado.inicio.toLocaleDateString('es-AR', {
     weekday: 'long', day: 'numeric', month: 'long', timeZone: cuenta.timezone,
   })
-  const horaLocal = turno.inicio.toLocaleTimeString('es-AR', {
+  const horaLocal = turnoActualizado.inicio.toLocaleTimeString('es-AR', {
     hour: '2-digit', minute: '2-digit', timeZone: cuenta.timezone,
   })
   const cancelUrl = `${env.PUBLIC_BASE_URL}/${cuenta.slug}/confirmar/${token}`
 
   try {
     await enviarEmailRecordatorio({
-      to: turno.cliente?.email ?? '',
+      to: tokenRow.turno.cliente?.email ?? '',
       cuentaNombre: cuenta.nombrePublico,
-      servicio: turno.servicio.nombre,
+      servicio: tokenRow.turno.servicio.nombre,
       fecha: fechaLocal,
       hora: horaLocal,
       cancelUrl,
     })
   } catch (err) {
-    logger.warn({ err, turnoId: turno.id }, 'No se pudo enviar recordatorio post-confirmación')
+    logger.warn({ err, turnoId: tokenRow.turno.id }, 'No se pudo enviar recordatorio post-confirmación')
   }
 
-  return NextResponse.json({ ok: true, turnoId: turno.id })
+  return NextResponse.json({ ok: true, turnoId: tokenRow.turno.id })
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
@@ -94,25 +92,28 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
 
   const tokenHash = hashToken(token)
 
-  const turno = await db.turno.findFirst({
-    where: {
-      notas: { contains: `token_confirmacion_hash:${tokenHash}` },
-      estado: { in: ['borrador', 'confirmado'] },
-    },
+  const tokenRow = await db.tokenConfirmacion.findFirst({
+    where: { tokenHash },
+    include: { turno: true },
   })
 
-  if (!turno) {
-    return NextResponse.json({ error: 'Token inválido o turno no encontrado' }, { status: 404 })
+  if (!tokenRow || !tokenRow.turno) {
+    return NextResponse.json({ error: 'Token inválido' }, { status: 404 })
+  }
+  if (tokenRow.turno.estado === 'cancelado') {
+    return NextResponse.json({ error: 'Turno ya cancelado' }, { status: 409 })
   }
 
-  await db.turno.update({
-    where: { id: turno.id },
-    data: {
-      estado: 'cancelado',
-      origenCancelacion: 'cliente',
-      notas: turno.notas.replace(TOKEN_PATTERN, '').replace(/^;+|;+$/g, ''),
-    },
-  })
+  await db.$transaction([
+    db.tokenConfirmacion.update({
+      where: { id: tokenRow.id },
+      data: { usadaEn: new Date() },
+    }),
+    db.turno.update({
+      where: { id: tokenRow.turno.id },
+      data: { estado: 'cancelado', origenCancelacion: 'cliente' },
+    }),
+  ])
 
   return NextResponse.json({ ok: true, mensaje: 'Turno cancelado y horario liberado' })
 }
