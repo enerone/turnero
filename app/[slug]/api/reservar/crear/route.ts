@@ -10,6 +10,7 @@ import { enviarEmailConfirmacion } from '@/lib/public-booking/email'
 import { enviarWhatsAppConfirmacion } from '@/lib/public-booking/whatsapp'
 import { escribirAudit } from '@/lib/audit/log'
 import { normalizarTelefonoE164 } from '@/lib/format/telefono'
+import { formatearFechaLocal, formatearHoraLocal } from '@/lib/format/fecha'
 
 export const dynamic = 'force-dynamic'
 
@@ -151,12 +152,8 @@ export async function POST(req: NextRequest) {
   })
 
   const confirmUrl = `${env.PUBLIC_BASE_URL}/${cuenta.slug}/confirmar/${token}`
-  const fechaLocal = inicioDt.toLocaleDateString('es-AR', {
-    weekday: 'long', day: 'numeric', month: 'long', timeZone: cuenta.timezone,
-  })
-  const horaLocal = inicioDt.toLocaleTimeString('es-AR', {
-    hour: '2-digit', minute: '2-digit', timeZone: cuenta.timezone,
-  })
+  const fechaLocal = formatearFechaLocal(inicioDt, cuenta.timezone)
+  const horaLocal = formatearHoraLocal(inicioDt, cuenta.timezone)
 
   try {
     if (cliente.email) {

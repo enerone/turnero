@@ -3,9 +3,11 @@ import { createHash } from 'node:crypto'
 import { getTenant } from '@/lib/tenant/resolve'
 import { TenantNotFoundError, NoTenantInRequestError } from '@/lib/db/errors'
 import { enviarEmailRecordatorio } from '@/lib/public-booking/email'
+import { enviarWhatsAppTexto } from '@/lib/whatsapp'
 import { env } from '@/lib/shared/env'
 import { logger } from '@/lib/shared/logger'
 import { escribirAudit } from '@/lib/audit/log'
+import { formatearFechaLocal, formatearHoraLocal, formatearFechaHoraLocal } from '@/lib/format/fecha'
 
 export const dynamic = 'force-dynamic'
 
@@ -68,12 +70,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     payload: { canal: 'cliente_via_token', tokenId: tokenRow.id },
   })
 
-  const fechaLocal = turnoActualizado.inicio.toLocaleDateString('es-AR', {
-    weekday: 'long', day: 'numeric', month: 'long', timeZone: cuenta.timezone,
-  })
-  const horaLocal = turnoActualizado.inicio.toLocaleTimeString('es-AR', {
-    hour: '2-digit', minute: '2-digit', timeZone: cuenta.timezone,
-  })
+  const fechaLocal = formatearFechaLocal(turnoActualizado.inicio, cuenta.timezone)
+  const horaLocal = formatearHoraLocal(turnoActualizado.inicio, cuenta.timezone)
   const cancelUrl = `${env.PUBLIC_BASE_URL}/${cuenta.slug}/confirmar/${token}`
 
   try {
@@ -96,13 +94,13 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   const { token } = await params
   const tenant = await resolveTenant()
   if (!tenant) return NextResponse.json({ error: 'Tenant no encontrado' }, { status: 404 })
-  const { db } = tenant
+  const { cuenta, db } = tenant
 
   const tokenHash = hashToken(token)
 
   const tokenRow = await db.tokenConfirmacion.findFirst({
     where: { tokenHash },
-    include: { turno: true },
+    include: { turno: { include: { servicio: true, cliente: true } } },
   })
 
   if (!tokenRow || !tokenRow.turno) {
@@ -129,6 +127,29 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     entidadId: tokenRow.turno.id,
     payload: { origen: 'cliente', tokenId: tokenRow.id },
   })
+
+  // Aviso al owner: el profesional necesita saber que se le liberó un slot.
+  // Best-effort: si falla, seguimos — el turno ya está cancelado en DB.
+  try {
+    const dueño = await db.usuario.findFirst({ where: { rol: 'owner' } })
+    const nombreCliente = tokenRow.turno.cliente?.nombre ?? 'un cliente'
+    const cuando = formatearFechaHoraLocal(tokenRow.turno.inicio, cuenta.timezone)
+    const mensaje = `Se canceló un turno: ${nombreCliente} para ${cuando} (${tokenRow.turno.servicio.nombre}). El horario quedó libre.`
+
+    if (cuenta.telefonoWhatsapp) {
+      await enviarWhatsAppTexto({ to: cuenta.telefonoWhatsapp, body: mensaje })
+    }
+    if (dueño?.email) {
+      const { enviarEmailAviso } = await import('@/lib/public-booking/email')
+      await enviarEmailAviso({
+        to: dueño.email,
+        asunto: `Turno cancelado en ${cuenta.nombrePublico}`,
+        cuerpoHtml: `<p>${mensaje}</p>`,
+      })
+    }
+  } catch (err) {
+    logger.warn({ err, cuentaId: cuenta.id, turnoId: tokenRow.turno.id }, 'No se pudo avisar al owner sobre cancelación')
+  }
 
   return NextResponse.json({ ok: true, mensaje: 'Turno cancelado y horario liberado' })
 }

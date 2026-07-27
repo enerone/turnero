@@ -5,20 +5,11 @@ import { enviarEmailRecordatorio } from '@/lib/public-booking/email'
 import { enviarWhatsAppRecordatorio } from '@/lib/public-booking/whatsapp'
 import { env } from '@/lib/shared/env'
 import { logger } from '@/lib/shared/logger'
+import { formatearFechaLocal, formatearHoraLocal } from '@/lib/format/fecha'
 
 export const NOMBRE_JOB_RECORDATORIO = 'recordatorio-diario'
 
 const TZ_DEFAULT = 'America/Argentina/Buenos_Aires'
-
-function formatFechaLocal(inicio: Date, timezone: string): { fecha: string; hora: string } {
-  const fecha = inicio.toLocaleDateString('es-AR', {
-    weekday: 'long', day: 'numeric', month: 'long', timeZone: timezone,
-  })
-  const hora = inicio.toLocaleTimeString('es-AR', {
-    hour: '2-digit', minute: '2-digit', timeZone: timezone,
-  })
-  return { fecha, hora }
-}
 
 async function crearTokenParaRecordatorio(
   db: ReturnType<typeof createTenantClient>,
@@ -69,7 +60,9 @@ export async function handler(): Promise<void> {
     for (const turno of turnos) {
       if (!turno.cliente) continue
 
-      const { fecha, hora } = formatFechaLocal(turno.inicio, cuenta.timezone || TZ_DEFAULT)
+      const tz = cuenta.timezone || TZ_DEFAULT
+      const fecha = formatearFechaLocal(turno.inicio, tz)
+      const hora = formatearHoraLocal(turno.inicio, tz)
       const token = await crearTokenParaRecordatorio(db, turno.id)
       const cancelUrl = `${env.PUBLIC_BASE_URL}/${cuenta.slug}/confirmar/${token}`
 

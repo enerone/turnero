@@ -21,7 +21,38 @@ const NODE_BUILTINS = [
   'stream/web', 'dns/promises',
 ]
 
+// CSP restrictivo: la app no ejecuta JS de terceros ni carga fuentes/imágenes
+// externas (todavía). Si mañana metemos un pixel de analytics o embed, agregar
+// los dominios acá y NO usar 'unsafe-inline' salvo que sea obligatorio.
+const CSP = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline'", // Next 15 inyecta inline scripts para hydration
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: https:",
+  "font-src 'self' data:",
+  "connect-src 'self'",
+  "frame-ancestors 'none'",
+  "form-action 'self'",
+  "base-uri 'self'",
+  "object-src 'none'",
+].join('; ')
+
+const SECURITY_HEADERS = [
+  { key: 'Content-Security-Policy', value: CSP },
+  { key: 'X-Frame-Options', value: 'DENY' },
+  { key: 'X-Content-Type-Options', value: 'nosniff' },
+  { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+  { key: 'Permissions-Policy', value: 'geolocation=(), microphone=(), camera=(), payment=()' },
+  // HSTS sólo tiene sentido cuando la app corre bajo HTTPS real.
+  ...(process.env.NODE_ENV === 'production'
+    ? [{ key: 'Strict-Transport-Security', value: 'max-age=31536000; includeSubDomains' }]
+    : []),
+]
+
 const nextConfig: NextConfig = {
+  async headers() {
+    return [{ source: '/:path*', headers: SECURITY_HEADERS }]
+  },
   serverExternalPackages: [
     '@prisma/client',
     'pg-boss',

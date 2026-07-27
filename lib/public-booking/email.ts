@@ -52,6 +52,29 @@ export async function enviarEmailConfirmacion(params: EnviarConfirmacionParams):
   })
 }
 
+export interface EnviarAvisoParams {
+  to: string
+  asunto: string
+  cuerpoHtml: string
+}
+
+/**
+ * Aviso interno para el owner (cancelación de turno, etc.). No es
+ * transaccional del cliente final; se usa para operativa del profesional.
+ */
+export async function enviarEmailAviso(params: EnviarAvisoParams): Promise<void> {
+  const { to, asunto, cuerpoHtml } = params
+  if (!to) {
+    logger.info({ asunto }, '[dev-email] Sin destinatario, no se envía aviso')
+    return
+  }
+  if (!resend) {
+    logger.info({ to, asunto }, '[dev-email] aviso (RESEND_API_KEY no seteada)')
+    return
+  }
+  await resend.emails.send({ from: env.RESEND_FROM, to, subject: asunto, html: cuerpoHtml })
+}
+
 export async function enviarEmailRecordatorio(params: EnviarRecordatorioParams): Promise<void> {
   const { to, cuentaNombre, servicio, fecha, hora, cancelUrl } = params
 
