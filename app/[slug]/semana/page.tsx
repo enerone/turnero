@@ -110,6 +110,7 @@ export default async function SemanaPage({ params, searchParams }: Props) {
       <header style={styles.header}>
         <div style={styles.headerLeft}>
           <Link href={`/${cuenta.slug}/hoy`} style={styles.viewLink}>📱 Lista</Link>
+          <Link href={`/${cuenta.slug}/config`} style={styles.viewLink}>⚙ Config</Link>
           <span style={styles.cuentaNombre}>{cuenta.nombrePublico}</span>
         </div>
         <nav style={styles.nav}>

@@ -117,6 +117,7 @@ export default async function HoyPage({ params, searchParams }: Props) {
       <nav style={styles.footerNav}>
         <Link href={`/${cuenta.slug}/hoy`} style={styles.footerLink}>Hoy</Link>
         <Link href={`/${cuenta.slug}/semana`} style={styles.footerLink}>Semana</Link>
+        <Link href={`/${cuenta.slug}/config`} style={styles.footerLink}>Config</Link>
       </nav>
     </main>
   )
