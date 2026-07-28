@@ -7,6 +7,7 @@ import { logger } from '@/lib/shared/logger'
 import { escribirAudit } from '@/lib/audit/log'
 import { formatearFechaLocal, formatearHoraLocal, formatearFechaHoraLocal } from '@/lib/format/fecha'
 import { encolarEmail, encolarWhatsApp } from '@/lib/outbox/encolar'
+import { enqueueSyncTurnoGoogle } from '@/lib/jobs/enqueue'
 
 export const dynamic = 'force-dynamic'
 
@@ -69,6 +70,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     payload: { canal: 'cliente_via_token', tokenId: tokenRow.id },
   })
 
+  // Sync a Google Calendar (best-effort, retry en pg-boss).
+  try {
+    await enqueueSyncTurnoGoogle({ cuentaId: cuenta.id, turnoId: tokenRow.turno.id, operacion: 'upsert' })
+  } catch (err) {
+    logger.warn({ err, turnoId: tokenRow.turno.id }, 'No se pudo encolar sync a Google')
+  }
+
   const fechaLocal = formatearFechaLocal(turnoActualizado.inicio, cuenta.timezone)
   const horaLocal = formatearHoraLocal(turnoActualizado.inicio, cuenta.timezone)
   const cancelUrl = `${env.PUBLIC_BASE_URL}/${cuenta.slug}/confirmar/${token}`
@@ -127,6 +135,13 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     entidadId: tokenRow.turno.id,
     payload: { origen: 'cliente', tokenId: tokenRow.id },
   })
+
+  // Sync a Google Calendar: borrar el evento si estaba pusheado.
+  try {
+    await enqueueSyncTurnoGoogle({ cuentaId: cuenta.id, turnoId: tokenRow.turno.id, operacion: 'delete' })
+  } catch (err) {
+    logger.warn({ err, turnoId: tokenRow.turno.id }, 'No se pudo encolar sync-delete a Google')
+  }
 
   // Aviso al owner: encolamos en outbox para no bloquear la request.
   const dueño = await db.usuario.findFirst({ where: { rol: 'owner' } })

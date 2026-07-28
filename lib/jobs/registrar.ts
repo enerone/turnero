@@ -14,6 +14,11 @@ import {
   handler as handlerOutbox,
   NOMBRE_JOB_OUTBOX,
 } from './handlers/procesar-outbox'
+import {
+  handlerSyncTurnoGoogle,
+  NOMBRE_JOB_SYNC_TURNO_GOOGLE,
+  type PayloadSyncTurnoGoogle,
+} from './handlers/sync-turno-google'
 
 const REGISTRO: Array<{
   nombre: string
@@ -30,6 +35,10 @@ const REGISTRO: Array<{
   {
     nombre: NOMBRE_JOB_OUTBOX,
     handler: () => handlerOutbox(),
+  },
+  {
+    nombre: NOMBRE_JOB_SYNC_TURNO_GOOGLE,
+    handler: (data) => handlerSyncTurnoGoogle(data as PayloadSyncTurnoGoogle),
   },
 ]
 
