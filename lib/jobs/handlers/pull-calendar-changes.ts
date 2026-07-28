@@ -156,12 +156,26 @@ async function aplicarCambioDedicado(
   }
 
   if (!turno) {
-    // Evento creado directamente en Google en el calendario dedicado —
-    // Plan 3b.d va a definir la regla. Por ahora, log y saltear (no queremos
-    // crear turnos "fantasma" sin cliente asociado).
+    // Regla de conflicto #4 (docs/calendar-sync-rules.md):
+    // Evento creado directamente en Google en el calendario dedicado — no lo
+    // convertimos en Turno porque no tenemos cliente ni servicio para
+    // asociar. Lo guardamos como EventoExterno para que bloquee slots en el
+    // booking público. El profesional puede crear el turno formal desde el
+    // panel si quiere.
+    const inicio = ev.start?.dateTime ? new Date(ev.start.dateTime) : null
+    const fin = ev.end?.dateTime ? new Date(ev.end.dateTime) : null
+    if (!inicio || !fin) return
+    await db.eventoExterno.create({
+      data: {
+        googleEventId: ev.id,
+        inicio,
+        fin,
+        titulo: ev.summary ?? '(sin título)',
+      } as any,
+    })
     logger.info(
       { googleEventId: ev.id, summary: ev.summary },
-      'pull dedicado: evento nuevo sin turno local (aún no soportado, ver Plan 3b.d)',
+      'pull dedicado: evento nuevo importado como EventoExterno (regla #4)',
     )
     return
   }

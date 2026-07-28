@@ -219,6 +219,46 @@ describe('pull-calendar-changes handler', () => {
     expect(actualizado?.googleEventEtag).toBe('"v2"')
   })
 
+  it('regla #4: evento nuevo creado en el dedicado desde Google → EventoExterno', async () => {
+    const cuenta = await crearCuentaFixture(testPrisma)
+    currentCuentaId = cuenta.id
+    await testPrisma.integracionCalendar.create({
+      data: {
+        cuentaId: cuenta.id,
+        refreshTokenCifrado: Buffer.alloc(0),
+        calendarIdDedicado: 'cal_dedicado',
+        calendarIdPrimario: 'primary',
+      },
+    })
+
+    listSpy.mockResolvedValue({
+      data: {
+        items: [{
+          id: 'evt_manual_google',
+          status: 'confirmed',
+          etag: '"v1"',
+          summary: 'Reunión con proveedor',
+          start: { dateTime: '2028-02-10T15:00:00Z' },
+          end: { dateTime: '2028-02-10T16:00:00Z' },
+        }],
+        nextSyncToken: 'sync_x',
+      },
+    })
+
+    const { handlerPullCalendarChanges } = await import('@/lib/jobs/handlers/pull-calendar-changes')
+    await handlerPullCalendarChanges({ cuentaId: cuenta.id, tipo: 'dedicado' })
+
+    // No se debe crear un turno
+    const turnos = await testPrisma.turno.findMany({ where: { cuentaId: cuenta.id } })
+    expect(turnos).toHaveLength(0)
+
+    // Sí se debe crear un EventoExterno para bloquear el slot
+    const bloqueos = await testPrisma.eventoExterno.findMany({ where: { cuentaId: cuenta.id } })
+    expect(bloqueos).toHaveLength(1)
+    expect(bloqueos[0].googleEventId).toBe('evt_manual_google')
+    expect(bloqueos[0].titulo).toBe('Reunión con proveedor')
+  })
+
   it('idempotente: mismo etag no dispara update', async () => {
     const cuenta = await crearCuentaFixture(testPrisma)
     currentCuentaId = cuenta.id
