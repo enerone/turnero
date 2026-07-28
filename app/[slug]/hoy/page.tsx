@@ -4,6 +4,7 @@ import { getTenant } from '@/lib/tenant/resolve'
 import { getSession } from '@/lib/auth/session'
 import { formatearFechaLocal } from '@/lib/format/fecha'
 import { HoyClient } from './HoyClient'
+import { PanelMenu } from '../_components/PanelMenu'
 
 export const dynamic = 'force-dynamic'
 
@@ -86,6 +87,7 @@ export default async function HoyPage({ params, searchParams }: Props) {
             <div style={styles.fecha}>{esHoy ? 'Hoy' : ''} {fechaLabel}</div>
           </div>
           <Link href={`/${cuenta.slug}/hoy?fecha=${manana}`} style={styles.navBtn} aria-label="Día siguiente">→</Link>
+          <PanelMenu slug={cuenta.slug} activa="hoy" />
         </div>
       </header>
 
@@ -114,11 +116,6 @@ export default async function HoyPage({ params, searchParams }: Props) {
         />
       )}
 
-      <nav style={styles.footerNav}>
-        <Link href={`/${cuenta.slug}/hoy`} style={styles.footerLink}>Hoy</Link>
-        <Link href={`/${cuenta.slug}/semana`} style={styles.footerLink}>Semana</Link>
-        <Link href={`/${cuenta.slug}/config`} style={styles.footerLink}>Config</Link>
-      </nav>
     </main>
   )
 }
@@ -127,7 +124,7 @@ const styles: Record<string, React.CSSProperties> = {
   container: {
     maxWidth: 560,
     margin: '0 auto',
-    padding: '0 0 5rem',
+    padding: '0 0 2rem',
     fontFamily: 'system-ui, -apple-system, sans-serif',
     minHeight: '100vh',
     background: '#f4f5f7',
@@ -178,22 +175,5 @@ const styles: Record<string, React.CSSProperties> = {
     textAlign: 'center',
     color: '#6b7280',
     padding: '4rem 1rem',
-  },
-  footerNav: {
-    position: 'fixed',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    display: 'flex',
-    justifyContent: 'space-around',
-    background: '#fff',
-    borderTop: '1px solid #e5e7eb',
-    padding: '0.75rem 0',
-  },
-  footerLink: {
-    color: '#0ea5e9',
-    textDecoration: 'none',
-    fontSize: '0.9375rem',
-    fontWeight: 500,
   },
 }

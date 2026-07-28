@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { getTenant } from '@/lib/tenant/resolve'
 import { getSession } from '@/lib/auth/session'
 import { SemanaGrid } from './SemanaGrid'
+import { PanelMenu } from '../_components/PanelMenu'
 
 export const dynamic = 'force-dynamic'
 
@@ -109,8 +110,7 @@ export default async function SemanaPage({ params, searchParams }: Props) {
     <main style={styles.container}>
       <header style={styles.header}>
         <div style={styles.headerLeft}>
-          <Link href={`/${cuenta.slug}/hoy`} style={styles.viewLink}>📱 Lista</Link>
-          <Link href={`/${cuenta.slug}/config`} style={styles.viewLink}>⚙ Config</Link>
+          <PanelMenu slug={cuenta.slug} activa="semana" />
           <span style={styles.cuentaNombre}>{cuenta.nombrePublico}</span>
         </div>
         <nav style={styles.nav}>

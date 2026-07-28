@@ -1,9 +1,9 @@
 import { redirect } from 'next/navigation'
-import Link from 'next/link'
 import { getTenant } from '@/lib/tenant/resolve'
 import { getSession } from '@/lib/auth/session'
 import { puede } from '@/lib/auth/puede'
 import { ConfigCliente } from './ConfigCliente'
+import { PanelMenu } from '../_components/PanelMenu'
 
 export const dynamic = 'force-dynamic'
 
@@ -33,7 +33,7 @@ export default async function ConfigPage({ params }: { params: Promise<{ slug: s
   return (
     <main style={styles.container}>
       <header style={styles.header}>
-        <Link href={`/${cuenta.slug}/hoy`} style={styles.backLink}>← Panel</Link>
+        <PanelMenu slug={cuenta.slug} activa="config" />
         <h1 style={styles.h1}>Configuración</h1>
       </header>
 
@@ -96,12 +96,6 @@ const styles: Record<string, React.CSSProperties> = {
     position: 'sticky',
     top: 0,
     zIndex: 10,
-  },
-  backLink: {
-    color: '#0ea5e9',
-    textDecoration: 'none',
-    fontSize: '0.9375rem',
-    fontWeight: 500,
   },
   h1: {
     margin: 0,
