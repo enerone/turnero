@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation'
 interface Props {
   slug: string
   /** Página activa para marcarla visualmente */
-  activa?: 'hoy' | 'semana' | 'config'
+  activa?: 'hoy' | 'semana' | 'config' | 'contactos'
 }
 
 export function PanelMenu({ slug, activa }: Props) {
@@ -80,6 +80,9 @@ export function PanelMenu({ slug, activa }: Props) {
               </NavItem>
               <NavItem href={`/${slug}/semana`} activa={activa === 'semana'} onClick={cerrar}>
                 Semana
+              </NavItem>
+              <NavItem href={`/${slug}/contactos`} activa={activa === 'contactos'} onClick={cerrar}>
+                Contactos
               </NavItem>
               <NavItem href={`/${slug}/config`} activa={activa === 'config'} onClick={cerrar}>
                 Configuración
