@@ -31,6 +31,8 @@ model Cuenta {
   eventosExternos      EventoExterno[]
   auditLogs            AuditLog[]
   invitaciones         Invitacion[]
+  tokensConfirmacion   TokenConfirmacion[]
+  mensajesOutbox       OutboxMensaje[]
 
   @@map("cuenta")
 }
@@ -73,12 +75,16 @@ model IntegracionCalendar {
   refreshTokenCifrado       Bytes             @map("refresh_token_cifrado")
   calendarIdDedicado        String?           @map("calendar_id_dedicado")
   calendarIdPrimario        String            @default("primary") @map("calendar_id_primario")
-  watchChannelDedicadoId    String?           @map("watch_channel_dedicado_id")
-  watchChannelDedicadoExpira DateTime?        @map("watch_channel_dedicado_expira")
-  watchChannelPrimarioId    String?           @map("watch_channel_primario_id")
-  watchChannelPrimarioExpira DateTime?        @map("watch_channel_primario_expira")
-  syncTokenDedicado         String?           @map("sync_token_dedicado")
-  syncTokenPrimario         String?           @map("sync_token_primario")
+  watchChannelDedicadoId         String?    @map("watch_channel_dedicado_id")
+  watchChannelDedicadoResourceId String?    @map("watch_channel_dedicado_resource_id")
+  watchChannelDedicadoToken      String?    @map("watch_channel_dedicado_token")
+  watchChannelDedicadoExpira     DateTime?  @map("watch_channel_dedicado_expira") @db.Timestamptz(6)
+  watchChannelPrimarioId         String?    @map("watch_channel_primario_id")
+  watchChannelPrimarioResourceId String?    @map("watch_channel_primario_resource_id")
+  watchChannelPrimarioToken      String?    @map("watch_channel_primario_token")
+  watchChannelPrimarioExpira     DateTime?  @map("watch_channel_primario_expira") @db.Timestamptz(6)
+  syncTokenDedicado              String?    @map("sync_token_dedicado")
+  syncTokenPrimario              String?    @map("sync_token_primario")
   estado                    EstadoIntegracion @default(conectado)
   createdAt                 DateTime          @default(now()) @map("created_at")
   updatedAt                 DateTime          @updatedAt @map("updated_at")
@@ -189,28 +195,82 @@ enum OrigenCancelacion {
 }
 
 model Turno {
-  id                 String             @id @default(uuid()) @db.Uuid
-  cuentaId           String             @map("cuenta_id") @db.Uuid
-  clienteId          String?            @map("cliente_id") @db.Uuid
-  servicioId         String             @map("servicio_id") @db.Uuid
-  inicio             DateTime           @db.Timestamptz(6)
-  fin                DateTime           @db.Timestamptz(6)
-  estado             EstadoTurno        @default(confirmado)
-  googleEventId      String?            @map("google_event_id")
-  googleEventEtag    String?            @map("google_event_etag")
-  origen             OrigenTurno        @default(turnero)
-  origenCancelacion  OrigenCancelacion? @map("origen_cancelacion")
-  notas              String             @default("")
-  createdAt          DateTime           @default(now()) @map("created_at")
-  updatedAt          DateTime           @updatedAt @map("updated_at")
+  id                     String             @id @default(uuid()) @db.Uuid
+  cuentaId               String             @map("cuenta_id") @db.Uuid
+  clienteId              String?            @map("cliente_id") @db.Uuid
+  servicioId             String             @map("servicio_id") @db.Uuid
+  inicio                 DateTime           @db.Timestamptz(6)
+  fin                    DateTime           @db.Timestamptz(6)
+  estado                 EstadoTurno        @default(confirmado)
+  googleEventId          String?            @map("google_event_id")
+  googleEventEtag        String?            @map("google_event_etag")
+  origen                 OrigenTurno        @default(turnero)
+  origenCancelacion      OrigenCancelacion? @map("origen_cancelacion")
+  notas                  String             @default("")
+  recordatorioEnviadoEn  DateTime?          @map("recordatorio_enviado_en") @db.Timestamptz(6)
+  createdAt              DateTime           @default(now()) @map("created_at")
+  updatedAt              DateTime           @updatedAt @map("updated_at")
 
   cuenta   Cuenta    @relation(fields: [cuentaId], references: [id], onDelete: Cascade)
   cliente  Cliente?  @relation(fields: [clienteId], references: [id], onDelete: SetNull)
   servicio Servicio  @relation(fields: [servicioId], references: [id], onDelete: Restrict)
+  tokensConfirmacion TokenConfirmacion[]
 
   @@index([cuentaId, inicio])
   @@index([cuentaId, googleEventId])
   @@map("turno")
+}
+
+enum EstadoOutbox {
+  pendiente
+  procesado
+  fallado
+
+  @@map("estado_outbox")
+}
+
+enum TipoOutboxMensaje {
+  email_transaccional
+  whatsapp
+
+  @@map("tipo_outbox_mensaje")
+}
+
+model OutboxMensaje {
+  id                String              @id @default(uuid()) @db.Uuid
+  cuentaId          String              @map("cuenta_id") @db.Uuid
+  tipo              TipoOutboxMensaje
+  destinatario      String
+  payload           Json
+  estado            EstadoOutbox        @default(pendiente)
+  intentos          Int                 @default(0)
+  siguienteIntento  DateTime            @default(now()) @map("siguiente_intento") @db.Timestamptz(6)
+  procesadoEn       DateTime?           @map("procesado_en") @db.Timestamptz(6)
+  ultimoError       String?             @map("ultimo_error")
+  createdAt         DateTime            @default(now()) @map("created_at")
+
+  cuenta Cuenta @relation(fields: [cuentaId], references: [id], onDelete: Cascade)
+
+  @@index([estado, siguienteIntento])
+  @@index([cuentaId])
+  @@map("outbox_mensaje")
+}
+
+model TokenConfirmacion {
+  id         String    @id @default(uuid()) @db.Uuid
+  cuentaId   String    @map("cuenta_id") @db.Uuid
+  turnoId    String    @map("turno_id") @db.Uuid
+  tokenHash  String    @unique @map("token_hash")
+  expiraEn   DateTime  @map("expira_en") @db.Timestamptz(6)
+  usadaEn    DateTime? @map("usada_en") @db.Timestamptz(6)
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  cuenta Cuenta @relation(fields: [cuentaId], references: [id], onDelete: Cascade)
+  turno  Turno  @relation(fields: [turnoId], references: [id], onDelete: Cascade)
+
+  @@index([cuentaId, turnoId])
+  @@index([expiraEn])
+  @@map("token_confirmacion")
 }
 
 model EventoExterno {

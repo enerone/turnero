@@ -7,7 +7,7 @@ export default defineConfig({
     environment: 'node',
     include: ['tests/unit/**/*.test.ts', 'tests/integration/**/*.test.ts'],
     exclude: ['tests/e2e/**'],
-    setupFiles: [],
+    setupFiles: ['./tests/setup.ts'],
     testTimeout: 10_000,
     hookTimeout: 30_000,
     pool: 'forks',

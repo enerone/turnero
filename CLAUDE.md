@@ -49,6 +49,18 @@ npm run dev
 - `refresh_token` de Google: cifrado con AES-256-GCM. Llave por-cuenta derivada de `ENCRYPTION_KEY` vía HKDF-SHA256 con info `turnero.cuenta.<cuentaId>`.
 - Invitación de secretaria: token de un solo uso vía email (Resend). El lookup por token usa una función SQL `SECURITY DEFINER` (`lookup_invitacion_por_token`) que bypasea RLS solo para ese SELECT específico — necesario porque no conocemos el `cuentaId` antes del lookup.
 
+## Jobs infrastructure (Plan 3a)
+
+- **`pg-boss` en el mismo proceso Node que Next.js.** Arrancado desde `instrumentation.ts`. Usa `DIRECT_URL` (superuser) porque crea su propio schema `pgboss`.
+- **Handlers** viven en `lib/jobs/handlers/`. El registry está en `lib/jobs/registrar.ts`. Cada job nuevo se agrega ahí + un helper tipado en `lib/jobs/enqueue.ts`.
+- **`JOBS_ENABLED=false`** deshabilita el boot (útil en tests unit que no requieren jobs).
+- **Google Calendar client** (`lib/calendar/google-client.ts`) descifra el `refresh_token` cifrado por-cuenta con AES-256-GCM + HKDF, y devuelve un cliente `calendar_v3` autenticado. googleapis se encarga del refresh del access_token.
+- **Bootstrap flow:** después de onboarding exitoso, `completarOnboarding` encola `bootstrap-calendar` con el `cuentaId`. El handler crea (o reusa si existe) un calendario `Turnero` en el Google del profesional y guarda su ID en `IntegracionCalendar.calendar_id_dedicado`. El banner en `/[slug]` avisa "preparando calendario…" hasta que el ID aparece.
+- **Lookup cross-tenant sin contexto** (jobs, session validation, invitation): función SQL `SECURITY DEFINER` explícita (`lookup_integracion_calendar`, `lookup_session_con_usuario`, `lookup_invitacion_por_token`). Bypasea RLS solo para ese SELECT específico, con GRANT explícito a `turnero_app`.
+- **Watch channels, sync bidireccional, webhook, reconciliación** → Plan 3b.
+
+> **⚠️ Limitación serverless:** `pg-boss` corre en el mismo proceso Node. En plataformas serverless (Vercel, AWS Lambda) el proceso se apaga entre invocaciones → los workers dejan de procesar jobs. Para producción serverless, migrar a worker separado (Railway, Fly.io, Cloud Run) o usar cola externa (Redis + BullMQ, SQS). Ver `instrumentation.ts` para el boot actual.
+
 ## Setup de Google OAuth (dev)
 
 1. En [Google Cloud Console](https://console.cloud.google.com), creá un proyecto y andá a APIs & Services → Credentials.

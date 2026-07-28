@@ -18,6 +18,15 @@ const schema = z.object({
   RESEND_API_KEY: z.string().default(''),
   RESEND_FROM: z.string().default('Turnero <onboarding@localhost>'),
 
+  // WhatsApp Cloud API (opcional en dev — si falta no se envían mensajes)
+  WHATSAPP_TOKEN: z.string().default(''),
+  WHATSAPP_PHONE_ID: z.string().default(''),
+
+  JOBS_ENABLED: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((v) => v === 'true'),
+
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
 })
 

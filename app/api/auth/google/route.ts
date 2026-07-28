@@ -4,6 +4,7 @@ import { generateState, generateCodeVerifier } from 'arctic'
 import { google, GOOGLE_SCOPES } from '@/lib/auth/google-oauth'
 import { serializarPendingInvitacion } from '@/lib/auth/pending-onboarding'
 import { env } from '@/lib/shared/env'
+import { rateLimitAuth } from '@/lib/rate-limit'
 
 const COOKIE_STATE = 'google_oauth_state'
 const COOKIE_VERIFIER = 'google_code_verifier'
@@ -11,6 +12,9 @@ const COOKIE_INTENT_INVITACION = 'turnero_invitacion_pending'
 const COOKIE_TTL = 60 * 10
 
 export async function GET(req: NextRequest) {
+  const rl = rateLimitAuth(req)
+  if (rl) return rl
+
   if (!env.GOOGLE_CLIENT_ID) {
     return NextResponse.json({ error: 'Google OAuth no configurado' }, { status: 500 })
   }

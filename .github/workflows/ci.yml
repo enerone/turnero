@@ -36,6 +36,7 @@ jobs:
       SESSION_SECRET: test-session-secret-32-chars-or-more-please-yes
       RESEND_API_KEY: ""
       NODE_ENV: test
+      JOBS_ENABLED: "false"
 
     steps:
       - uses: actions/checkout@v4

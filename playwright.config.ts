@@ -16,6 +16,11 @@ export default defineConfig({
     url: 'http://localhost:3100',
     timeout: 60_000,
     reuseExistingServer: !process.env.CI,
+    env: {
+      // E2E no necesita pg-boss real: los tests no dependen de jobs y así
+      // evitamos ruido de logs cuando el schema pgboss ya existe.
+      JOBS_ENABLED: 'false',
+    },
   },
   projects: [
     {
