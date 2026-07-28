@@ -3,6 +3,7 @@ import {
   obtenerCalendarClient,
   obtenerIntegracionCalendar,
 } from '@/lib/calendar/google-client'
+import { asegurarWatches } from '@/lib/calendar/watch'
 import { logger } from '@/lib/shared/logger'
 
 export const NOMBRE_JOB_BOOTSTRAP_CALENDAR = 'bootstrap-calendar'
@@ -61,4 +62,12 @@ export async function handlerBootstrapCalendar(payload: PayloadBootstrapCalendar
       data: { calendarIdDedicado: calendarId },
     })
   })
+
+  // Setup watch channels post-bootstrap. Best-effort: si falla, el cron
+  // horario `renovar-watch-channels` los va a agarrar después.
+  try {
+    await asegurarWatches(cuentaId)
+  } catch (err) {
+    logger.error({ err, cuentaId }, 'bootstrap-calendar: falló setup de watches, se reintenta en cron')
+  }
 }

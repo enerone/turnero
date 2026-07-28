@@ -40,6 +40,33 @@ export interface IntegracionLookup {
   calendar_id_dedicado: string | null
   calendar_id_primario: string
   estado: 'conectado' | 'desconectado'
+  watch_channel_dedicado_id: string | null
+  watch_channel_dedicado_resource_id: string | null
+  watch_channel_dedicado_token: string | null
+  watch_channel_dedicado_expira: Date | null
+  watch_channel_primario_id: string | null
+  watch_channel_primario_resource_id: string | null
+  watch_channel_primario_token: string | null
+  watch_channel_primario_expira: Date | null
+  sync_token_dedicado: string | null
+  sync_token_primario: string | null
+}
+
+export interface IntegracionPorChannel {
+  cuenta_id: string
+  tipo: 'dedicado' | 'primario'
+  calendar_id: string
+  sync_token: string | null
+  token: string | null
+}
+
+export async function obtenerIntegracionPorChannel(
+  channelId: string,
+): Promise<IntegracionPorChannel | null> {
+  const filas = await basePrisma.$queryRaw<IntegracionPorChannel[]>`
+    SELECT * FROM lookup_integracion_por_channel(${channelId})
+  `
+  return filas[0] ?? null
 }
 
 /**
