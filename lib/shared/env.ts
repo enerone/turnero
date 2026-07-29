@@ -22,6 +22,16 @@ const schema = z.object({
   WHATSAPP_TOKEN: z.string().default(''),
   WHATSAPP_PHONE_ID: z.string().default(''),
 
+  // WhatsApp Bot conversacional
+  WHATSAPP_ACCESS_TOKEN: z.string().default(''),
+  WHATSAPP_PHONE_NUMBER_ID: z.string().default(''),
+  WHATSAPP_VERIFY_TOKEN: z.string().default(''),
+  WHATSAPP_ACCOUNT_SLUG: z.string().default(''),
+
+  // Telegram Bot
+  TELEGRAM_BOT_TOKEN: z.string().default(''),
+  TELEGRAM_ACCOUNT_SLUG: z.string().default(''),
+
   JOBS_ENABLED: z
     .enum(['true', 'false'])
     .default('true')
