@@ -5,10 +5,12 @@ export const dynamic = 'force-dynamic'
 
 export default async function DetalleCuentaAdminPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>
+  searchParams: Promise<{ creada?: string; usuarioId?: string }>
 }) {
-  const { id } = await params
+  const [{ id }, sp] = await Promise.all([params, searchParams])
 
   const cuenta = await basePrisma.cuenta.findUnique({
     where: { id },
@@ -88,6 +90,16 @@ export default async function DetalleCuentaAdminPage({
           {cuenta.nombrePublico}
         </h1>
       </div>
+
+      {sp.creada === '1' && sp.usuarioId && (
+        <div style={{ background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 10, padding: '1rem 1.25rem', marginBottom: '1.5rem' }}>
+          <div style={{ fontWeight: 600, color: '#166534', marginBottom: '0.5rem' }}>Cuenta creada. Compartile este link al cliente para que entre:</div>
+          <code style={{ display: 'block', background: '#dcfce7', padding: '0.5rem 0.75rem', borderRadius: 6, fontSize: '0.875rem', color: '#15803d', wordBreak: 'break-all' }}>
+            {process.env.PUBLIC_BASE_URL}/test/login-as?usuarioId={sp.usuarioId}&cuentaId={id}
+          </code>
+          <div style={{ fontSize: '0.75rem', color: '#4ade80', marginTop: '0.375rem' }}>Solo funciona en dev. En producción configurar Google OAuth con el email del owner.</div>
+        </div>
+      )}
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '24px' }}>
         <div style={cardStyle}>

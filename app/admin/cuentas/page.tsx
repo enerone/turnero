@@ -42,9 +42,12 @@ export default async function CuentasAdminPage() {
 
   return (
     <div>
-      <h1 style={{ margin: '0 0 24px', fontSize: '24px', fontWeight: 700, color: '#0f172a' }}>
-        Cuentas
-      </h1>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
+        <h1 style={{ margin: 0, fontSize: '24px', fontWeight: 700, color: '#0f172a' }}>Cuentas</h1>
+        <a href="/admin/cuentas/nueva" style={{ padding: '8px 16px', background: '#0ea5e9', color: '#fff', borderRadius: 8, textDecoration: 'none', fontSize: '14px', fontWeight: 600 }}>
+          + Nueva cuenta
+        </a>
+      </div>
       <div
         style={{
           background: '#fff',
