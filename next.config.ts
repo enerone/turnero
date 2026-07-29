@@ -24,9 +24,12 @@ const NODE_BUILTINS = [
 // CSP restrictivo: la app no ejecuta JS de terceros ni carga fuentes/imágenes
 // externas (todavía). Si mañana metemos un pixel de analytics o embed, agregar
 // los dominios acá y NO usar 'unsafe-inline' salvo que sea obligatorio.
+const isDev = process.env.NODE_ENV !== 'production'
+
 const CSP = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline'", // Next 15 inyecta inline scripts para hydration
+  // Next 15 inyecta inline scripts para hydration; dev también necesita unsafe-eval para React Refresh.
+  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''}`,
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: https:",
   "font-src 'self' data:",
