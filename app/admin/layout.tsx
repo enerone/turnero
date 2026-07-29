@@ -52,36 +52,34 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   }
 
   return (
-    <html lang="es">
-      <body style={{ margin: 0, fontFamily: 'system-ui, sans-serif', display: 'flex', minHeight: '100vh', background: '#f1f5f9' }}>
-        <aside style={sidebarStyle}>
-          <div style={headerStyle}>Panel Admin</div>
-          <nav style={navStyle}>
-            <a href="/admin/cuentas" style={linkStyle}>Cuentas</a>
-          </nav>
-          <div style={bottomStyle}>
-            <form action="/api/admin/logout" method="POST">
-              <button
-                type="submit"
-                style={{
-                  ...logoutStyle,
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  width: '100%',
-                  textAlign: 'left',
-                  padding: '8px 12px',
-                }}
-              >
-                Cerrar sesion
-              </button>
-            </form>
-          </div>
-        </aside>
-        <main style={{ flex: 1, padding: '32px', overflowY: 'auto' }}>
-          {children}
-        </main>
-      </body>
-    </html>
+    <div style={{ display: 'flex', minHeight: '100vh', background: '#f1f5f9', fontFamily: 'system-ui, sans-serif' }}>
+      <aside style={sidebarStyle}>
+        <div style={headerStyle}>Panel Admin</div>
+        <nav style={navStyle}>
+          <a href="/admin/cuentas" style={linkStyle}>Cuentas</a>
+        </nav>
+        <div style={bottomStyle}>
+          <form action="/api/admin/logout" method="POST">
+            <button
+              type="submit"
+              style={{
+                ...logoutStyle,
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                width: '100%',
+                textAlign: 'left',
+                padding: '8px 12px',
+              }}
+            >
+              Cerrar sesion
+            </button>
+          </form>
+        </div>
+      </aside>
+      <main style={{ flex: 1, padding: '32px', overflowY: 'auto' }}>
+        {children}
+      </main>
+    </div>
   )
 }
