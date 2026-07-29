@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { slugDesdeRequest } from '@/lib/tenant/slug-from-request'
 import { NOMBRE_COOKIE_PENDING } from '@/lib/auth/pending-onboarding'
+import { expectedAdminCookieValue } from '@/lib/admin/auth'
 
 const DOMINIO_BASE = process.env.PUBLIC_BASE_URL
   ? new URL(process.env.PUBLIC_BASE_URL).hostname
@@ -39,9 +40,20 @@ function getClientIp(req: NextRequest): string {
     'unknown'
 }
 
-export function middleware(req: NextRequest) {
+export async function middleware(req: NextRequest) {
   const hostname = req.headers.get('host') ?? ''
   const { pathname } = req.nextUrl
+
+  if (pathname.startsWith('/admin')) {
+    if (pathname !== '/admin/login') {
+      const adminCookie = req.cookies.get('admin_session')
+      const expected = await expectedAdminCookieValue()
+      if (!adminCookie || adminCookie.value !== expected) {
+        return NextResponse.redirect(new URL('/admin/login', req.url))
+      }
+    }
+    return NextResponse.next()
+  }
 
   if (esRutaSistema(pathname)) return NextResponse.next()
 
