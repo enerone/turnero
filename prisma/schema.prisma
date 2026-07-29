@@ -33,8 +33,43 @@ model Cuenta {
   invitaciones         Invitacion[]
   tokensConfirmacion   TokenConfirmacion[]
   mensajesOutbox       OutboxMensaje[]
+  conversacionesBot    ConversacionBot[]
 
   @@map("cuenta")
+}
+
+enum CanalBot {
+  whatsapp
+  telegram
+
+  @@map("canal_bot")
+}
+
+enum EstadoConversacion {
+  inicio
+  esperando_dia
+  esperando_slot
+  esperando_nombre
+  completado
+  cancelado
+
+  @@map("estado_conversacion")
+}
+
+model ConversacionBot {
+  id         String              @id @default(uuid()) @db.Uuid
+  cuentaId   String              @map("cuenta_id") @db.Uuid
+  canal      CanalBot
+  externoId  String              @map("externo_id")
+  estado     EstadoConversacion  @default(inicio)
+  contexto   Json                @default("{}")
+  updatedAt  DateTime            @updatedAt @map("updated_at")
+
+  cuenta Cuenta @relation(fields: [cuentaId], references: [id], onDelete: Cascade)
+
+  @@unique([cuentaId, canal, externoId])
+  @@index([cuentaId])
+  @@map("conversacion_bot")
 }
 
 enum RolUsuario {

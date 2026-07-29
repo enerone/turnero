@@ -13,4 +13,5 @@ export const TENANT_SCOPED_MODELS = new Set<Prisma.ModelName>([
   'Invitacion',
   'TokenConfirmacion',
   'OutboxMensaje',
+  'ConversacionBot',
 ])
